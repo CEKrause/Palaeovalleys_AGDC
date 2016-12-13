@@ -8,7 +8,7 @@
 
 module use /g/data/v10/public/modules/modulefiles
 
-module load agdc-py2-prod
+module load agdc-py3-prod
 python Palaeovalley_NDVI_linear_regression_raijin.py > Run_NDVI_regression_output
 
 
