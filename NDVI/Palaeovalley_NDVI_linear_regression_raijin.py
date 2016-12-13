@@ -280,7 +280,9 @@ for num in iterable:
     # Set up the bounds for your AGDC data extraction
     start_date = '1980-01-01'
     end_date = '2016-12-31'
-    OUTPUT_FILENAME = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI8_month_%s.nc'
+    OUTPUT_FILENAME8 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI8_month_%s.nc'
+    OUTPUT_FILENAME7 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI7_month_%s.nc'
+    OUTPUT_FILENAME5 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI5_month_%s.nc'
     pathname = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual'
     pathnamedir = '/g/data/p25/cek156/NDVI/' + Studysite.Name
     concat_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_monthly_concat.nc'
@@ -304,9 +306,9 @@ for num in iterable:
     if dir_check == False:
         os.makedirs(pathnamedir)
 
-        query = {'lat': (names.maxlat[num], names.minlat[num]), 
-                 'lon': (names.minlon[num], names.maxlon[num]),
-                 'crs': 'EPSG:4326'}
+    query = {'lat': (names.maxlat[num], names.minlat[num]), 
+             'lon': (names.minlon[num], names.maxlon[num]),
+             'crs': 'EPSG:4326'}
 
     #Retrieve the NBAR and PQ data for sensor 8
     # Check if directory exists, and if not, make it
@@ -330,7 +332,7 @@ for num in iterable:
             ds = ndvi.to_dataset(name='ndvi')
             ds.attrs['affine'] = affine
             ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME % time_period.start_time.strftime('%Y-%m')
+            output_filename = OUTPUT_FILENAME8 % time_period.start_time.strftime('%Y-%m')
             ds.to_netcdf(path=output_filename, mode='w')
 
     #Retrieve the NBAR and PQ data for sensor 7
@@ -356,7 +358,7 @@ for num in iterable:
             ds = ndvi.to_dataset(name='ndvi')
             ds.attrs['affine'] = affine
             ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME % time_period.start_time.strftime('%Y-%m')
+            output_filename = OUTPUT_FILENAME7 % time_period.start_time.strftime('%Y-%m')
             ds.to_netcdf(path=output_filename, mode='w')
 
     #Retrieve the NBAR and PQ data for sensor 5
@@ -382,7 +384,7 @@ for num in iterable:
             ds = ndvi.to_dataset(name='ndvi')
             ds.attrs['affine'] = affine
             ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME % time_period.start_time.strftime('%Y-%m')
+            output_filename = OUTPUT_FILENAME5 % time_period.start_time.strftime('%Y-%m')
             ds.to_netcdf(path=output_filename, mode='w')
 
     # Read in all the months and create monthly averages
