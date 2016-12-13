@@ -41,55 +41,7 @@ import numpy as np
 
 dc = datacube.Datacube(app='dc-example')
 
-########################################################################################
-########### Set up your inputs and data query ##########################################
-########################################################################################
-
-# Set up the case study bounding box (to make the file smaller and avoid memory errors)
-names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimiter = ',')
-
-# Choose the case study site to analyse
-num = 48
-Studysite = names.ix[num]
-
-#### DEFINE SPATIOTEMPORAL RANGE AND BANDS OF INTEREST
-#Define wavelengths/bands of interest, remove this kwarg to retrieve all bands
-bands_of_interest = [#'blue',
-                     #'green',
-                     'red', 
-                     'nir',
-                     #'swir1', 
-                     #'swir2'
-                     ]
-#Define sensors of interest
-sensor8 = 'ls8'
-sensor7 = 'ls7'
-sensor5 = 'ls5'
-query = {'lat': (names.maxlat[num], names.minlat[num]), 
-         'lon': (names.minlon[num], names.maxlon[num]),
-         'crs': 'EPSG:4326'}
-
-# Set up the bounds for your AGDC data extraction
-start_date = '1980-01-01'
-end_date = '2016-12-31'
-OUTPUT_FILENAME = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI8_month_%s.nc'
-pathname = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual'
-pathnamedir = '/g/data/p25/cek156/NDVI/' + Studysite.Name
-concat_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_monthly_concat.nc'
-
-#Define time interval and months range for linear regression
-month_1 = 'February'
-#f you want to only look at one month then simply make month_1 equal to month_2
-month_2 = 'October'
-
-slope_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_slope.nc'
-pval_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_pVal.nc'
-geotiff_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_drying_trend.tiff'
-
-##############################################################################################
-### You shouldn't need to change anything below here #########################################
-##############################################################################################
-
+# Set up the functions for the code
 def geom_query(geom, geom_crs='EPSG:28352'):
     """
     Create datacube query snippet for geometry
@@ -296,18 +248,65 @@ def write_geotiff(filename, dataset, time_index=None, profile_override=None):
             dest.write(data, bandnum)
             print ('Done')
 
+
+### Begin the analysis ######################################################################
+
+# Set up the case study bounding box (to make the file smaller and avoid memory errors)
+names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimiter = ',')
+
 # Work out how many sites we want to analyse, and set up a list of numbers we can loop through
 x = len(names.index)
 iterable = list(range(0,x-1)) # We don't need to run the test again
 
 for num in iterable:
     Studysite = names.ix[num]
+    ########################################################################################
+    ########### Set up your inputs and data query ##########################################
+    ########################################################################################
+
+    #Define wavelengths/bands of interest, remove this kwarg to retrieve all bands
+    bands_of_interest = [#'blue',
+                         #'green',
+                         'red', 
+                         'nir',
+                         #'swir1', 
+                         #'swir2'
+                         ]
+    #Define sensors of interest
+    sensor8 = 'ls8'
+    sensor7 = 'ls7'
+    sensor5 = 'ls5'
+
+    # Set up the bounds for your AGDC data extraction
+    start_date = '1980-01-01'
+    end_date = '2016-12-31'
+    OUTPUT_FILENAME = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI8_month_%s.nc'
+    pathname = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual'
+    pathnamedir = '/g/data/p25/cek156/NDVI/' + Studysite.Name
+    concat_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_monthly_concat.nc'
+
+    #Define time interval and months range for linear regression
+    month_1 = 'February'
+    #f you want to only look at one month then simply make month_1 equal to month_2
+    month_2 = 'October'
+
+    slope_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_slope.nc'
+    pval_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_pVal.nc'
+    geotiff_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_drying_trend.tiff'
+
+    ##############################################################################################
+    ### You shouldn't need to change anything below here #########################################
+    ##############################################################################################
+   
     print ('Working on ' + Studysite.Name)
     # Check whether the Study site directory has been created, and if not, create it.
     dir_check = os.path.isdir(pathnamedir)
     if dir_check == False:
         os.makedirs(pathnamedir)
 
+        query = {'lat': (names.maxlat[num], names.minlat[num]), 
+                 'lon': (names.minlon[num], names.maxlon[num]),
+                 'crs': 'EPSG:4326'}
 
     #Retrieve the NBAR and PQ data for sensor 8
     # Check if directory exists, and if not, make it
