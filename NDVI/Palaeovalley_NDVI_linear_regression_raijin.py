@@ -466,3 +466,5 @@ for num in iterable:
 
     write_geotiff(outfile, slope_xr)
 
+    # Clean up the individual files to save memory
+    os.remove(pathname +'/*')
