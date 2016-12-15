@@ -38,6 +38,7 @@ import pandas
 from scipy import stats
 import os
 import numpy as np
+import sys
 
 dc = datacube.Datacube(app='dc-example')
 
@@ -254,217 +255,224 @@ def write_geotiff(filename, dataset, time_index=None, profile_override=None):
 # Set up the case study bounding box (to make the file smaller and avoid memory errors)
 names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimiter = ',')
 
-# Work out how many sites we want to analyse, and set up a list of numbers we can loop through
-x = len(names.index)
-iterable = list(range(0,x-1)) # We don't need to run the test again
+# The looping of sites is done in the bash code, so we can just call on the passed
+# argument for our site number
 
-for num in iterable:
-    Studysite = names.ix[num]
-    ########################################################################################
-    ########### Set up your inputs and data query ##########################################
-    ########################################################################################
+num = sys.argv
+print('Working on ' + Studysite.Name)
+########################################################################################
+########### Set up your inputs and data query ##########################################
+########################################################################################
 
-    #Define wavelengths/bands of interest, remove this kwarg to retrieve all bands
-    bands_of_interest = [#'blue',
-                         #'green',
-                         'red', 
-                         'nir',
-                         #'swir1', 
-                         #'swir2'
-                         ]
-    #Define sensors of interest
-    sensor8 = 'ls8'
-    sensor7 = 'ls7'
-    sensor5 = 'ls5'
+#Define wavelengths/bands of interest, remove this kwarg to retrieve all bands
+bands_of_interest = [#'blue',
+                     #'green',
+                     'red', 
+                     'nir',
+                     #'swir1', 
+                     #'swir2'
+                     ]
+#Define sensors of interest
+sensor8 = 'ls8'
+sensor7 = 'ls7'
+sensor5 = 'ls5'
 
-    # Set up the bounds for your AGDC data extraction
-    start_date = '1980-01-01'
-    end_date = '2016-12-31'
-    OUTPUT_FILENAME8 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI8_month_%s.nc'
-    OUTPUT_FILENAME7 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI7_month_%s.nc'
-    OUTPUT_FILENAME5 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI5_month_%s.nc'
-    pathname = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual'
-    pathnamedir = '/g/data/p25/cek156/NDVI/' + Studysite.Name
-    concat_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_monthly_concat.nc'
+# Set up the bounds for your AGDC data extraction
+start_date = '1980-01-01'
+end_date = '2016-12-31'
+OUTPUT_FILENAME8 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI8_month_%s.nc'
+OUTPUT_FILENAME7 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI7_month_%s.nc'
+OUTPUT_FILENAME5 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI5_month_%s.nc'
+pathname = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual'
+pathnamedir = '/g/data/p25/cek156/NDVI/' + Studysite.Name
+concat_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_monthly_concat.nc'
 
-    #Define time interval and months range for linear regression
-    month_1 = 'February'
-    #f you want to only look at one month then simply make month_1 equal to month_2
-    month_2 = 'October'
+#Define time interval and months range for linear regression
+month_1 = 'February'
+#f you want to only look at one month then simply make month_1 equal to month_2
+month_2 = 'September'
 
-    slope_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_slope.nc'
-    pval_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_pVal.nc'
-    geotiff_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_drying_trend.tiff'
+slope_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_slope.nc'
+pval_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_pVal.nc'
+geotiff_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_drying_trend.tiff'
 
-    ##############################################################################################
-    ### You shouldn't need to change anything below here #########################################
-    ##############################################################################################
-   
-    print ('Working on ' + Studysite.Name)
-    # Check whether the Study site directory has been created, and if not, create it.
-    dir_check = os.path.isdir(pathnamedir)
-    if dir_check == False:
-        os.makedirs(pathnamedir)
+##############################################################################################
+### You shouldn't need to change anything below here #########################################
+##############################################################################################
 
-    query = {'lat': (names.maxlat[num], names.minlat[num]), 
-             'lon': (names.minlon[num], names.maxlon[num]),
-             'crs': 'EPSG:4326'}
+print ('Working on ' + Studysite.Name)
+# Check whether the Study site directory has been created, and if not, create it.
+dir_check = os.path.isdir(pathnamedir)
+if dir_check == False:
+    os.makedirs(pathnamedir)
 
-    #Retrieve the NBAR and PQ data for sensor 8
-    # Check if directory exists, and if not, make it
-    dir_check = os.path.isdir(pathname)
-    if dir_check == False:
-        os.makedirs(pathname)
-    # And now grab the data...
-    for time_period in pd.period_range(start_date, end_date, freq='M'):
-        query['time'] = (time_period.start_time, time_period.end_time)
-        nbar = dc.load(product= sensor8+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-        if nbar :    
-            pq = dc.load(product= sensor8+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-            crs = nbar.crs.wkt
-            affine = nbar.affine
-            # Filter the data to remove bad pixels
-            nbar = return_good_pixels(nbar, pq)
-            pq = None
-            # Create monthly averaged data
-            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-            ds = ndvi.to_dataset(name='ndvi')
-            ds.attrs['affine'] = affine
-            ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME8 % time_period.start_time.strftime('%Y-%m')
-            ds.to_netcdf(path=output_filename, mode='w')
+query = {'lat': (names.maxlat[num], names.minlat[num]), 
+         'lon': (names.minlon[num], names.maxlon[num]),
+         'crs': 'EPSG:4326'}
 
-    #Retrieve the NBAR and PQ data for sensor 7
-    # Check if directory exists, and if not, make it
-    dir_check = os.path.isdir(pathname)
-    if dir_check == False:
-        os.makedirs(pathname)
+#Retrieve the NBAR and PQ data for sensor 8
+# Check if directory exists, and if not, make it
+dir_check = os.path.isdir(pathname)
+if dir_check == False:
+    os.makedirs(pathname)
+# And now grab the data...
+for time_period in pd.period_range(start_date, end_date, freq='M'):
+    query['time'] = (time_period.start_time, time_period.end_time)
+    nbar = dc.load(product= sensor8+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+    if nbar :    
+        pq = dc.load(product= sensor8+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+        crs = nbar.crs.wkt
+        affine = nbar.affine
+        # Filter the data to remove bad pixels
+        nbar = return_good_pixels(nbar, pq)
+        pq = None
+        # Create monthly averaged data
+        monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+        ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+        ds = ndvi.to_dataset(name='ndvi')
+        ds.attrs['affine'] = affine
+        ds.attrs['crs'] = crs
+        output_filename = OUTPUT_FILENAME8 % time_period.start_time.strftime('%Y-%m')
+        ds.to_netcdf(path=output_filename, mode='w')
+print('Finished getting data for sensor 8 for ' + Studysite.Name)
 
-    for time_period in pd.period_range(start_date, end_date, freq='M'):
-        query['time'] = (time_period.start_time, time_period.end_time)
-        # print('Querying: %s' % query)
-        nbar = dc.load(product= sensor7+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-        if nbar :    
-            pq = dc.load(product= sensor7+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-            crs = nbar.crs.wkt
-            affine = nbar.affine
-            # Filter the data to remove bad pixels
-            nbar = return_good_pixels(nbar, pq)
-            pq = None
-            # Create monthly averaged data
-            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-            ds = ndvi.to_dataset(name='ndvi')
-            ds.attrs['affine'] = affine
-            ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME7 % time_period.start_time.strftime('%Y-%m')
-            ds.to_netcdf(path=output_filename, mode='w')
+#Retrieve the NBAR and PQ data for sensor 7
+# Check if directory exists, and if not, make it
+dir_check = os.path.isdir(pathname)
+if dir_check == False:
+    os.makedirs(pathname)
 
-    #Retrieve the NBAR and PQ data for sensor 5
+for time_period in pd.period_range(start_date, end_date, freq='M'):
+    query['time'] = (time_period.start_time, time_period.end_time)
+    # print('Querying: %s' % query)
+    nbar = dc.load(product= sensor7+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+    if nbar :    
+        pq = dc.load(product= sensor7+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+        crs = nbar.crs.wkt
+        affine = nbar.affine
+        # Filter the data to remove bad pixels
+        nbar = return_good_pixels(nbar, pq)
+        pq = None
+        # Create monthly averaged data
+        monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+        ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+        ds = ndvi.to_dataset(name='ndvi')
+        ds.attrs['affine'] = affine
+        ds.attrs['crs'] = crs
+        output_filename = OUTPUT_FILENAME7 % time_period.start_time.strftime('%Y-%m')
+        ds.to_netcdf(path=output_filename, mode='w')    
+print('Finished getting data for sensor 7 for ' + Studysite.Name)
 
-    # Check if directory exists, and if not, make it
-    dir_check = os.path.isdir(pathname)
-    if dir_check == False:
-        os.makedirs(pathname)
-    for time_period in pd.period_range(start_date, end_date, freq='M'):
-        query['time'] = (time_period.start_time, time_period.end_time)
-        # print('Querying: %s' % query)
-        nbar = dc.load(product= sensor5+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-        if nbar :    
-            pq = dc.load(product= sensor5+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-            crs = nbar.crs.wkt
-            affine = nbar.affine
-            # Filter the data to remove bad pixels
-            nbar = return_good_pixels(nbar, pq)
-            pq = None
-            # Create monthly averaged data
-            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-            ds = ndvi.to_dataset(name='ndvi')
-            ds.attrs['affine'] = affine
-            ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME5 % time_period.start_time.strftime('%Y-%m')
-            ds.to_netcdf(path=output_filename, mode='w')
 
-    # Read in all the months and create monthly averages
-    jans = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*01.nc', concat_dim='time')
-    jan = jans.mean(dim = 'time')
-    febs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*02.nc', concat_dim='time')
-    feb = febs.mean(dim = 'time')
-    mars = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*03.nc', concat_dim='time')
-    mar = mars.mean(dim = 'time')
-    aprs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*04.nc', concat_dim='time')
-    apr = aprs.mean(dim = 'time')
-    mays = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*05.nc', concat_dim='time')
-    may = mays.mean(dim = 'time')
-    juns = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*06.nc', concat_dim='time')
-    jun = juns.mean(dim = 'time')
-    juls = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*07.nc', concat_dim='time')
-    jul = juls.mean(dim = 'time')
-    augs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*08.nc', concat_dim='time')
-    aug = augs.mean(dim = 'time')
-    seps = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*09.nc', concat_dim='time')
-    sep = seps.mean(dim = 'time')
-    octs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*10.nc', concat_dim='time')
-    octs = octs.mean(dim = 'time')
-    novs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*11.nc', concat_dim='time')
-    nov = novs.mean(dim = 'time')
-    decs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*12.nc', concat_dim='time')
-    dec = decs.mean(dim = 'time')
+#Retrieve the NBAR and PQ data for sensor 5
 
-    #Concatenate and sort the different sensor xarrays into a single xarray
-    ndvi_monthly = xr.concat([jan['ndvi'], feb['ndvi'], mar['ndvi'], apr['ndvi'], may['ndvi'], jun['ndvi'],
-                              jul['ndvi'], aug['ndvi'], sep['ndvi'], octs['ndvi'], nov['ndvi'], dec['ndvi']], 'month')
+# Check if directory exists, and if not, make it
+dir_check = os.path.isdir(pathname)
+if dir_check == False:
+    os.makedirs(pathname)
+for time_period in pd.period_range(start_date, end_date, freq='M'):
+    query['time'] = (time_period.start_time, time_period.end_time)
+    # print('Querying: %s' % query)
+    nbar = dc.load(product= sensor5+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+    if nbar :    
+        pq = dc.load(product= sensor5+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+        crs = nbar.crs.wkt
+        affine = nbar.affine
+        # Filter the data to remove bad pixels
+        nbar = return_good_pixels(nbar, pq)
+        pq = None
+        # Create monthly averaged data
+        monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+        ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+        ds = ndvi.to_dataset(name='ndvi')
+        ds.attrs['affine'] = affine
+        ds.attrs['crs'] = crs
+        output_filename = OUTPUT_FILENAME5 % time_period.start_time.strftime('%Y-%m')
+        ds.to_netcdf(path=output_filename, mode='w')    
 
-    # Save the outputs so that we don't need to keep running this script
-    ds = ndvi_monthly.to_dataset(name='ndvi')
-    ds.attrs['affine'] = affine
-    ds.attrs['crs'] = crs
-    output_filename = concat_output_name
-    ds.to_netcdf(path = output_filename, mode = 'w')
+print('Finished getting data for sensor 5 for ' + Studysite.Name)
 
-    #Define a dictionary for months
-    monthDict={'January':0, 'February':1, 'March':2, 'April':3, 'May':4, 'June':5, 'July':6, 'August':7, 'September':8,
-               'October':9, 'November':10, 'December':11}
 
-    #Split pull out all of the months of interest using the function defined above
-    split_data = month_cut(ndvi_monthly, month_1, month_2)
-    #Now perform the linear regression
-    slope_xr, p_val_xr = linear_regression_grid(split_data, mask_no_trend = True)
+# Read in all the months and create monthly averages
+jans = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*01.nc', concat_dim='time')
+jan = jans.mean(dim = 'time')
+febs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*02.nc', concat_dim='time')
+feb = febs.mean(dim = 'time')
+mars = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*03.nc', concat_dim='time')
+mar = mars.mean(dim = 'time')
+aprs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*04.nc', concat_dim='time')
+apr = aprs.mean(dim = 'time')
+mays = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*05.nc', concat_dim='time')
+may = mays.mean(dim = 'time')
+juns = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*06.nc', concat_dim='time')
+jun = juns.mean(dim = 'time')
+juls = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*07.nc', concat_dim='time')
+jul = juls.mean(dim = 'time')
+augs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*08.nc', concat_dim='time')
+aug = augs.mean(dim = 'time')
+seps = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*09.nc', concat_dim='time')
+sep = seps.mean(dim = 'time')
+octs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*10.nc', concat_dim='time')
+octs = octs.mean(dim = 'time')
+novs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*11.nc', concat_dim='time')
+nov = novs.mean(dim = 'time')
+decs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*12.nc', concat_dim='time')
+dec = decs.mean(dim = 'time')
 
-    # Save the outputs so that we don't need to keep running this script
-    ds = p_val_xr.to_dataset(name='p_val')
-    ds.attrs['affine'] = affine
-    ds.attrs['crs'] = crs
-    output_filename = pval_output_name
-    ds.to_netcdf(path = output_filename, mode = 'w')
-    print('wrote %s' % output_filename)
+#Concatenate and sort the different sensor xarrays into a single xarray
+ndvi_monthly = xr.concat([jan['ndvi'], feb['ndvi'], mar['ndvi'], apr['ndvi'], may['ndvi'], jun['ndvi'],
+                          jul['ndvi'], aug['ndvi'], sep['ndvi'], octs['ndvi'], nov['ndvi'], dec['ndvi']], 'month')
 
-    ds = slope_xr.to_dataset(name='slope')
-    ds.attrs['affine'] = affine
-    ds.attrs['crs'] = crs
-    output_filename = slope_output_name
-    ds.to_netcdf(path = output_filename, mode = 'w')
-    print('wrote %s' % output_filename)
+# Save the outputs so that we don't need to keep running this script
+ds = ndvi_monthly.to_dataset(name='ndvi')
+ds.attrs['affine'] = affine
+ds.attrs['crs'] = crs
+output_filename = concat_output_name
+ds.to_netcdf(path = output_filename, mode = 'w')
+print('Saved monthly averages for ' + Studysite.Name)
 
-    #Write the files out into a tif file for viewing in GIS
-    # You may need to adjust the default_profile values so that blockysize is not larger than the xr spatial dimensions
-    print(ds)
-    outfile = geotiff_output_name
+#Define a dictionary for months
+monthDict={'January':0, 'February':1, 'March':2, 'April':3, 'May':4, 'June':5, 'July':6, 'August':7, 'September':8,
+           'October':9, 'November':10, 'December':11}
 
-    #Function below is from https://github.com/data-cube/agdc-v2/blob/develop/datacube/helpers.py
-    DEFAULT_PROFILE = {
-        'blockxsize': 128,
-        'blockysize': 128,
-        'compress': 'lzw',
-        'driver': 'GTiff',
-        'interleave': 'band',
-        'nodata': 0.0,
-        'photometric': 'RGBA',
-        'tiled': True}
+#Split pull out all of the months of interest using the function defined above
+split_data = month_cut(ndvi_monthly, month_1, month_2)
+#Now perform the linear regression
+slope_xr, p_val_xr = linear_regression_grid(split_data, mask_no_trend = True)
 
-    write_geotiff(outfile, slope_xr)
+# Save the outputs so that we don't need to keep running this script
+ds = p_val_xr.to_dataset(name='p_val')
+ds.attrs['affine'] = affine
+ds.attrs['crs'] = crs
+output_filename = pval_output_name
+ds.to_netcdf(path = output_filename, mode = 'w')
+print('wrote %s' % output_filename)
 
-    # Clean up the individual files to save memory
-    os.remove(pathname +'/*')
+ds = slope_xr.to_dataset(name='slope')
+ds.attrs['affine'] = affine
+ds.attrs['crs'] = crs
+output_filename = slope_output_name
+ds.to_netcdf(path = output_filename, mode = 'w')
+print('wrote %s' % output_filename)
+
+#Write the files out into a tif file for viewing in GIS
+# You may need to adjust the default_profile values so that blockysize is not larger than the xr spatial dimensions
+print(ds)
+outfile = geotiff_output_name
+
+#Function below is from https://github.com/data-cube/agdc-v2/blob/develop/datacube/helpers.py
+DEFAULT_PROFILE = {
+    'blockxsize': 128,
+    'blockysize': 128,
+    'compress': 'lzw',
+    'driver': 'GTiff',
+    'interleave': 'band',
+    'nodata': 0.0,
+    'photometric': 'RGBA',
+    'tiled': True}
+
+write_geotiff(outfile, ds)
+
+# Clean up the individual files to save memory
+os.remove(pathname + '/*')
+print('Finished with ' + Studysite.Name)
