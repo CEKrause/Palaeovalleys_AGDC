@@ -259,6 +259,7 @@ names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimit
 # argument for our site number
 
 num = sys.argv
+Studysite = names.ix[num]
 print('Working on ' + Studysite.Name)
 ########################################################################################
 ########### Set up your inputs and data query ##########################################
