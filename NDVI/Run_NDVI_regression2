@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -P z67
+#PBS -q normal
+#PBS -l walltime=24:00:00
+#PBS -l mem=32GB
+#PBS -l ncpus=11
+#PBS -l wd
+
+module use /g/data/v10/public/modules/modulefiles
+
+module load agdc-py3-prod
+
+for i in {32..42}; do
+ python Palaeovalley_NDVI_linear_regression_raijin.py $i > linear_regress_out_$i &
+done
+
+wait
+
+
+
+
+
+
+
+
+
+
+
+
+
