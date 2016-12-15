@@ -258,7 +258,8 @@ names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimit
 # The looping of sites is done in the bash code, so we can just call on the passed
 # argument for our site number
 
-num = sys.argv
+print(sys.argv)
+num = int(sys.argv[1])
 Studysite = names.ix[num]
 print('Working on ' + Studysite.Name)
 ########################################################################################
