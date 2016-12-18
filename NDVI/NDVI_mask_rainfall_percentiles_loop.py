@@ -121,6 +121,51 @@ def return_good_pixels(nbar, pq):
     pqmask = masking.make_mask(pq.pixelquality,  **mask_components)
     return nbar.where(pqmask)
 
+def find_bomnum_index(num):
+    '''
+    Because we have cut up the bounding boxes, there is no longer a relationship between the location of a site in 
+    our rainfall data csv and bounding box csv. We will set up an index so that it's still correct
+    '''
+    if 0 <= num <=3:
+        bomnum = 0
+        print('Using data from' + wetdry_times.name[bomnum])
+    elif 4 <= num <=5:
+        bomnum = 1
+        print('Using data from' + wetdry_times.name[bomnum])
+    elif 6 <= num <=23:
+        bomnum = 2
+        print('Using data from' + wetdry_times.name[bomnum])
+    elif 24 <= num <=27:
+        bomnum = 3
+        print('Using data from' + wetdry_times.name[bomnum])
+    elif 28 <= num <=39:
+        bomnum = 4
+        print('Using data from' + wetdry_times.name[bomnum])
+    elif num ==40:
+        bomnum = 5
+        print('Using data from' + wetdry_times.name[bomnum])
+    elif 41 <= num <=42:
+        bomnum = 6
+        print('Using data from' + wetdry_times.name[bomnum])
+    elif num ==43:
+        bomnum = 7
+        print('Using data from' + wetdry_times.name[bomnum])
+    elif 44 <= num <=45:
+        bomnum = 8
+    return bomnum
+
+def write_to_csv(times, OUTPUT_path, row):
+    if times == 1 and Studysite.Name == 'Blackwood2A':
+        with open(OUTPUT_wet,'w') as csvFile:
+            writer = csv.writer(csvFile)
+            header = ['name', 'start date', 'ttest', 'KS test']
+            writer.writerow(header)
+            writer.writerow(row)
+    else:
+        with open(OUTPUT_wet,'a') as csvFile:
+           writer = csv.writer(csvFile)
+           writer.writerow(row)
+
 #########################################################################################
 ######################### Set up the code to run here ###################################
 #########################################################################################
@@ -155,33 +200,8 @@ for num in iterable:
     print ('Working on ' + Studysite.Name)
     # Because we have cut up the bounding boxes, there is no longer a relationship between the location of a site in 
     # our rainfall data csv and bounding box csv. We will set up an index so that it's still correct
-    if 0 <= num <=3:
-        bomnum = 0
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 4 <= num <=5:
-        bomnum = 1
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 6 <= num <=23:
-        bomnum = 2
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 24 <= num <=27:
-        bomnum = 3
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 28 <= num <=39:
-        bomnum = 4
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif num ==40:
-        bomnum = 5
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 41 <= num <=42:
-        bomnum = 6
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif num ==43:
-        bomnum = 7
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 44 <= num <=45:
-        bomnum = 8
-        print('Using data from' + wetdry_times.name[bomnum])
+    bomnum = find_bomnum_index(num)
+    print('Using data from' + wetdry_times.name[bomnum])
     # Let's start with wet years...
     wet_date = wetdry_times.wet[bomnum]
     wet_date = wet_date.split("'")
@@ -201,13 +221,13 @@ for num in iterable:
 
         # Set up the query for the datacube extraction
         #Define wavelengths/bands of interest, remove this kwarg to retrieve all bands
-        #bands_of_interest = [#'blue',
+        bands_of_interest = [#'blue',
                          #'green',
                          'red', 
                          'nir',
                          #'swir1', 
                          #'swir2',
-        #                     ]
+                             ]
         #Define sensors of interest
         sensor = ['ls8', 'ls7', 'ls5'] 
         # And pull together our bounding box and start and end times 
@@ -221,9 +241,9 @@ for num in iterable:
         sens = 1
         for sensor_iterable in range (0,sensor_all):
         #Retrieve the data and pixel quality (PQ) data for sensor n
-             nbar = dc.load(product = sensor_iterable +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+             nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
              if nbar :    
-                pq = dc.load(product = sensor_iterable +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+                pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
                 crs = nbar.crs.wkt
                 affine = nbar.affine
                 # Filter the data to remove bad pixels
@@ -239,98 +259,56 @@ for num in iterable:
                 print(allsens)
                 sens = sens + 1
  
-                if allsens:
-                    datamean = allsens.mean(dim = 'new_dim') 
-                    # Create the mask based on our shapefile
-                    mask = geometry_mask(warp_geometry(shp_union, shp.crs, ndvi.crs.wkt), ndvi.geobox, invert=True)
-                    # Get data only where the mask is 'true'
-                    data_masked = datamean.where(mask)
-                    # Get data only where the mask is 'false'
-                    data_maskedF = datamean.where(~ mask)
+        if allsens.any():
+            datamean = allsens.mean(dim = 'new_dim') 
+            # Create the mask based on our shapefile
+            print(shp.crs)
+            print(nbar.crs.wkt)
+            mask = geometry_mask(warp_geometry(shp_union, shp.crs, nbar.crs.wkt), nbar.geobox, invert=True)
+            # Get data only where the mask is 'true'
+            data_masked = datamean.where(mask)
+            # Get data only where the mask is 'false'
+            data_maskedF = datamean.where(~ mask)
 
-                    # Create a new numpy array with just the ndvi values
-                    data_masked2 = np.array(data_masked.ndvi)
-                    data_maskedF2 = np.array(data_maskedF.ndvi)
-                    # Grab only values that aren't nan
-                    data_masked_nonan = data_masked2[~np.isnan(data_masked2)]
-                    data_maskedF_nonan = data_maskedF2[~np.isnan(data_maskedF2)]
-                    masked_both = [data_masked_nonan,data_maskedF_nonan]
+            # Create a new numpy array with just the ndvi values
+            data_masked2 = np.array(data_masked.ndvi)
+            data_maskedF2 = np.array(data_maskedF.ndvi)
+            # Grab only values that aren't nan
+            data_masked_nonan = data_masked2[~np.isnan(data_masked2)]
+            data_maskedF_nonan = data_maskedF2[~np.isnan(data_maskedF2)]
+            masked_both = [data_masked_nonan,data_maskedF_nonan]
 
-                    # Test with an unpaired t-test. Equal var is false because our populations are different sizes
-                    # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
-                    stats_ttest, ttestpval = scipy.stats.ttest_ind(data_masked_nonan,data_maskedF_nonan, equal_var = 'False')
+            # Test with an unpaired t-test. Equal var is false because our populations are different sizes
+            # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
+            stats_ttest, ttestpval = scipy.stats.ttest_ind(data_masked_nonan,data_maskedF_nonan, equal_var = 'False')
 
-                    # Test with a Kolmogorov-Smirnov test 
-                    # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
-                    stats_KS, KSpval = scipy.stats.ks_2samp(data_masked_nonan,data_maskedF_nonan)
+            # Test with a Kolmogorov-Smirnov test 
+            # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
+            stats_KS, KSpval = scipy.stats.ks_2samp(data_masked_nonan,data_maskedF_nonan)
 
-                    # Pull together everything we want in our csv file
-                    row = [Studysite.Name, start_date, stats_ttest, stats_KS]
-                    # Write our stats to a csv file so we can compare them later
-                    # If this is the first site, make a new file, otherwise, append the existing file
-                    if times == 1 and Studysite.Name == 'Blackwood2A':
-                        with open(OUTPUT_wet,'w') as csvFile:
-                            writer = csv.writer(csvFile)
-                            header = ['name', 'start date', 'ttest', 'KS test']
-                            writer.writerow(header)
-                            writer.writerow(row)
-                    else:
-                        with open(OUTPUT_wet,'a') as csvFile:
-                            writer = csv.writer(csvFile)
-                            writer.writerow(row)
-           # Or if there is no data...
-            else:
-                row = [Studysite.Name, start_date, 'no data', 'no data']
-                if times == 1 and Studysite.Name == 'Blackwood2A':
-                    with open(OUTPUT_wet,'w') as csvFile:
-                        writer = csv.writer(csvFile)
-                        header = ['name', 'start date', 'ttest', 'KS test']
-                        writer.writerow(header)
-                        writer.writerow(row)
-                else:
-                    with open(OUTPUT_wet,'a') as csvFile:
-                        writer = csv.writer(csvFile)
-                        writer.writerow(row)
+            # Pull together everything we want in our csv file
+            row = [Studysite.Name, start_date, stats_ttest, stats_KS]
+            # Write our stats to a csv file so we can compare them later
+            # If this is the first site, make a new file, otherwise, append the existing file
+            write_to_csv(times, OUTPUT_wet, row)
+        # Or if there is no data...
+        else:
+            row = [Studysite.Name, start_date, 'no data', 'no data']
+            write_to_csv(times, OUTPUT_wet, row)
 
 ###################################### Now dry years #################################################
 
 iterable = list(range(0,x-6)) 
 # NB -6 because we don't have pv polygons for Daintree, Laura or Blackwood1, and we don't want to run the testing site
-
 # Loop through all of our study sites
 for num in iterable:
     Studysite = names.ix[num]
     print ('Working on ' + Studysite.Name)
     # Because we have cut up the bounding boxes, there is no longer a relationship between the location of a site in 
     # our rainfall data csv and bounding box csv. We will set up an index so that it's still correct
-    if 0 <= num <=3:
-        bomnum = 0
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 4 <= num <=5:
-        bomnum = 1
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 6 <= num <=23:
-        bomnum = 2
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 24 <= num <=27:
-        bomnum = 3
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 28 <= num <=39:
-        bomnum = 4
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif num ==40:
-        bomnum = 5
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 41 <= num <=42:
-        bomnum = 6
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif num ==43:
-        bomnum = 7
-        print('Using data from' + wetdry_times.name[bomnum])
-    elif 44 <= num <=45:
-        bomnum = 8
-        print('Using data from' + wetdry_times.name[bomnum])
-    # Now do the dry years...
+    bomnum = find_bomnum_index(num)
+    print('Using data from' + wetdry_times.name[bomnum])
+    # Let's start with wet years...
     dry_date = wetdry_times.dry[bomnum]
     dry_date = dry_date.split("'")
     xx = len(dry_date)-1
@@ -349,13 +327,13 @@ for num in iterable:
 
         # Set up the query for the datacube extraction
         #Define wavelengths/bands of interest, remove this kwarg to retrieve all bands
-        #bands_of_interest = [#'blue',
+        bands_of_interest = [#'blue',
                          #'green',
                          'red', 
                          'nir',
                          #'swir1', 
                          #'swir2',
-        #                     ]
+                             ]
         #Define sensors of interest
         sensor = ['ls8', 'ls7', 'ls5'] 
         # And pull together our bounding box and start and end times 
@@ -369,9 +347,9 @@ for num in iterable:
         sens = 1
         for sensor_iterable in range (0,sensor_all):
         #Retrieve the data and pixel quality (PQ) data for sensor n
-             nbar = dc.load(product = sensor_iterable +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+             nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
              if nbar :    
-                pq = dc.load(product = sensor_iterable +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+                pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
                 crs = nbar.crs.wkt
                 affine = nbar.affine
                 # Filter the data to remove bad pixels
@@ -387,55 +365,37 @@ for num in iterable:
                 print(allsens)
                 sens = sens + 1
  
-                if allsens:
-                    datamean = allsens.mean(dim = 'new_dim') 
-                    # Create the mask based on our shapefile
-                    mask = geometry_mask(warp_geometry(shp_union, shp.crs, ndvi.crs.wkt), ndvi.geobox, invert=True)
-                    # Get data only where the mask is 'true'
-                    data_masked = datamean.where(mask)
-                    # Get data only where the mask is 'false'
-                    data_maskedF = datamean.where(~ mask)
+        if allsens.any():
+            datamean = allsens.mean(dim = 'new_dim') 
+            # Create the mask based on our shapefile
+            mask = geometry_mask(warp_geometry(shp_union, shp.crs, nbar.crs.wkt), nbar.geobox, invert=True)
+            # Get data only where the mask is 'true'
+            data_masked = datamean.where(mask)
+            # Get data only where the mask is 'false'
+            data_maskedF = datamean.where(~ mask)
 
-                    # Create a new numpy array with just the ndvi values
-                    data_masked2 = np.array(data_masked.ndvi)
-                    data_maskedF2 = np.array(data_maskedF.ndvi)
-                    # Grab only values that aren't nan
-                    data_masked_nonan = data_masked2[~np.isnan(data_masked2)]
-                    data_maskedF_nonan = data_maskedF2[~np.isnan(data_maskedF2)]
-                    masked_both = [data_masked_nonan,data_maskedF_nonan]
+            # Create a new numpy array with just the ndvi values
+            data_masked2 = np.array(data_masked.ndvi)
+            data_maskedF2 = np.array(data_maskedF.ndvi)
+            # Grab only values that aren't nan
+            data_masked_nonan = data_masked2[~np.isnan(data_masked2)]
+            data_maskedF_nonan = data_maskedF2[~np.isnan(data_maskedF2)]
+            masked_both = [data_masked_nonan,data_maskedF_nonan]
 
-                    # Test with an unpaired t-test. Equal var is false because our populations are different sizes
-                    # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
-                    stats_ttest, ttestpval = scipy.stats.ttest_ind(data_masked_nonan,data_maskedF_nonan, equal_var = 'False')
+            # Test with an unpaired t-test. Equal var is false because our populations are different sizes
+            # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
+            stats_ttest, ttestpval = scipy.stats.ttest_ind(data_masked_nonan,data_maskedF_nonan, equal_var = 'False')
 
-                    # Test with a Kolmogorov-Smirnov test 
-                    # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
-                    stats_KS, KSpval = scipy.stats.ks_2samp(data_masked_nonan,data_maskedF_nonan)
+            # Test with a Kolmogorov-Smirnov test 
+            # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
+            stats_KS, KSpval = scipy.stats.ks_2samp(data_masked_nonan,data_maskedF_nonan)
 
-                    # Pull together everything we want in our csv file
-                    row = [Studysite.Name, start_date, stats_ttest, stats_KS]
-                    # Write our stats to a csv file so we can compare them later
-                    # If this is the first site, make a new file, otherwise, append the existing file
-                    if times == 1 and Studysite.Name == 'Blackwood2A':
-                        with open(OUTPUT_dry,'w') as csvFile:
-                            writer = csv.writer(csvFile)
-                            header = ['name', 'start date', 'ttest', 'KS test']
-                            writer.writerow(header)
-                            writer.writerow(row)
-                    else:
-                        with open(OUTPUT_dry,'a') as csvFile:
-                            writer = csv.writer(csvFile)
-                            writer.writerow(row)
-           # Or if there is no data...
-            else:
-                row = [Studysite.Name, start_date, 'no data', 'no data']
-                if times == 1 and Studysite.Name == 'Blackwood2A':
-                    with open(OUTPUT_dry,'w') as csvFile:
-                        writer = csv.writer(csvFile)
-                        header = ['name', 'start date', 'ttest', 'KS test']
-                        writer.writerow(header)
-                        writer.writerow(row)
-                else:
-                    with open(OUTPUT_dry,'a') as csvFile:
-                        writer = csv.writer(csvFile)
-                        writer.writerow(row)
+            # Pull together everything we want in our csv file
+            row = [Studysite.Name, start_date, stats_ttest, stats_KS]
+            # Write our stats to a csv file so we can compare them later
+            # If this is the first site, make a new file, otherwise, append the existing file
+            write_to_csv(times, OUTPUT_dry, row)
+        # Or if there is no data...
+        else:
+            row = [Studysite.Name, start_date, 'no data', 'no data']
+            write_to_csv(times, OUTPUT_dry, row)
