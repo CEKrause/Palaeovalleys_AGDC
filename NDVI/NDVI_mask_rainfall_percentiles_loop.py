@@ -12,7 +12,6 @@ Code Dependencies
 '''
 
 # Import the libraries we need in the code and tell matplotlib to display the plots here
-%matplotlib inline
 import fiona
 import shapely.geometry
 import rasterio
@@ -131,21 +130,25 @@ Case_study_file = '/g/data/p25/cek156/case_study_sites_small.csv'
 rainfall_percentiles = '/g/data/p25/cek156/BOM_site_rainfall.csv'
 polygon_path = '/g/data/p25/cek156/Palaeovalleys_2012.shp'
 
+print('input paths set')
+
 # Set up the paths to the output files
 OUTPUT_wet = '/g/data/p25/cek156/NDVI/NDVI_wet.csv'
 OUTPUT_dry = '/g/data/p25/cek156/NDVI/NDVI_dry.csv'
+print('output paths set')
 
 # Read in the input files
 names = pandas.read_csv(Case_study_file, delimiter = ',')
 wetdry_times = pandas.read_csv(rainfall_percentiles, delimiter = ',')
 shp = gp.GeoDataFrame.from_file(polygon_path)
+print('files read in')
 
+################################## Start with wet years ##############################################################
 
 # Work out how many sites we want to analyse, and set up a list of numbers we can loop through
 x = len(names.index)
 iterable = list(range(0,x-6)) 
 # NB -6 because we don't have pv polygons for Daintree, Laura or Blackwood1, and we don't want to run the testing site
-
 # Loop through all of our study sites
 for num in iterable:
     Studysite = names.ix[num]
@@ -215,72 +218,89 @@ for num in iterable:
         # Grab NDVI data from the datacube and filter it for pixel quality
         dc = datacube.Datacube(app='poly-drill-recipe')
         sensor_all = len(sensor)
+        sens = 1
         for sensor_iterable in range (0,sensor_all):
         #Retrieve the data and pixel quality (PQ) data for sensor n
-            nbar = dc.load(product = sensor_iterable +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-            if nbar :    
+             nbar = dc.load(product = sensor_iterable +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+             if nbar :    
                 pq = dc.load(product = sensor_iterable +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
                 crs = nbar.crs.wkt
                 affine = nbar.affine
                 # Filter the data to remove bad pixels
                 nbar = return_good_pixels(nbar, pq)
+                ndvi = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
+                if sens == 1:
+                    allsens = ndvi
+                if sens == 2:
+                    allsens = xr.concat(ndvi, allsens, dim = 'new_dim')
+                else:
+                    nbar = xr.concat([ndvi], dim = 'new_dim')
+                    allsens = xr.concat([allsens, ndvi],dim = 'new_dim')
+                print(allsens)
+                sens = sens + 1
+ 
+                if allsens:
+                    datamean = allsens.mean(dim = 'new_dim') 
+                    # Create the mask based on our shapefile
+                    mask = geometry_mask(warp_geometry(shp_union, shp.crs, ndvi.crs.wkt), ndvi.geobox, invert=True)
+                    # Get data only where the mask is 'true'
+                    data_masked = datamean.where(mask)
+                    # Get data only where the mask is 'false'
+                    data_maskedF = datamean.where(~ mask)
 
-            # Create the mask based on our shapefile
-            mask = geometry_mask(warp_geometry(shp_union, shp.crs, ndvi.crs.wkt), ndvi.geobox, invert=True)
-            # Get data only where the mask is 'true'
-            data_masked = datamean.where(mask)
-            # Get data only where the mask is 'false'
-            data_maskedF = datamean.where(~ mask)
+                    # Create a new numpy array with just the ndvi values
+                    data_masked2 = np.array(data_masked.ndvi)
+                    data_maskedF2 = np.array(data_maskedF.ndvi)
+                    # Grab only values that aren't nan
+                    data_masked_nonan = data_masked2[~np.isnan(data_masked2)]
+                    data_maskedF_nonan = data_maskedF2[~np.isnan(data_maskedF2)]
+                    masked_both = [data_masked_nonan,data_maskedF_nonan]
 
-            # Create a new numpy array with just the ndvi values
-            data_masked2 = np.array(data_masked.ndvi)
-            data_maskedF2 = np.array(data_maskedF.ndvi)
-            # Grab only values that aren't nan
-            data_masked_nonan = data_masked2[~np.isnan(data_masked2)]
-            data_maskedF_nonan = data_maskedF2[~np.isnan(data_maskedF2)]
-            masked_both = [data_masked_nonan,data_maskedF_nonan]
+                    # Test with an unpaired t-test. Equal var is false because our populations are different sizes
+                    # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
+                    stats_ttest, ttestpval = scipy.stats.ttest_ind(data_masked_nonan,data_maskedF_nonan, equal_var = 'False')
 
-            # Test with an unpaired t-test. Equal var is false because our populations are different sizes
-            # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
-            stats_ttest, ttestpval = scipy.stats.ttest_ind(data_masked_nonan,data_maskedF_nonan, equal_var = 'False')
+                    # Test with a Kolmogorov-Smirnov test 
+                    # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
+                    stats_KS, KSpval = scipy.stats.ks_2samp(data_masked_nonan,data_maskedF_nonan)
 
-            # Test with a Kolmogorov-Smirnov test 
-            # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
-            stats_KS, KSpval = scipy.stats.ks_2samp(data_masked_nonan,data_maskedF_nonan)
-
-            # Pull together everything we want in our csv file
-            row = [Studysite.Name, start_date, stats_ttest, stats_KS]
-            # Write our stats to a csv file so we can compare them later
-            # If this is the first site, make a new file, otherwise, append the existing file
-            if times == 1 and Studysite.Name == 'Blackwood2A':
-                with open('NDVI_wet.csv','w') as csvFile:
-                    writer = csv.writer(csvFile)
-                    header = ['name', 'start date', 'ttest', 'KS test']
-                    writer.writerow(header)
-                    writer.writerow(row)
+                    # Pull together everything we want in our csv file
+                    row = [Studysite.Name, start_date, stats_ttest, stats_KS]
+                    # Write our stats to a csv file so we can compare them later
+                    # If this is the first site, make a new file, otherwise, append the existing file
+                    if times == 1 and Studysite.Name == 'Blackwood2A':
+                        with open(OUTPUT_wet,'w') as csvFile:
+                            writer = csv.writer(csvFile)
+                            header = ['name', 'start date', 'ttest', 'KS test']
+                            writer.writerow(header)
+                            writer.writerow(row)
+                    else:
+                        with open(OUTPUT_wet,'a') as csvFile:
+                            writer = csv.writer(csvFile)
+                            writer.writerow(row)
+           # Or if there is no data...
             else:
-                with open('NDVI_wet.csv','a') as csvFile:
-                    writer = csv.writer(csvFile)
-                    writer.writerow(row)
-        # Or if there is no data...
-        else:
-            row = [Studysite.Name, start_date, 'no data', 'no data']
-            if times == 1 and Studysite.Name == 'Blackwood2A':
-                with open('NDVI_wet.csv','w') as csvFile:
-                    writer = csv.writer(csvFile)
-                    header = ['name', 'start date', 'ttest', 'KS test']
-                    writer.writerow(header)
-                    writer.writerow(row)
-            else:
-                with open('NDVI_wet.csv','a') as csvFile:
-                    writer = csv.writer(csvFile)
-                    writer.writerow(row)
+                row = [Studysite.Name, start_date, 'no data', 'no data']
+                if times == 1 and Studysite.Name == 'Blackwood2A':
+                    with open(OUTPUT_wet,'w') as csvFile:
+                        writer = csv.writer(csvFile)
+                        header = ['name', 'start date', 'ttest', 'KS test']
+                        writer.writerow(header)
+                        writer.writerow(row)
+                else:
+                    with open(OUTPUT_wet,'a') as csvFile:
+                        writer = csv.writer(csvFile)
+                        writer.writerow(row)
+
+###################################### Now dry years #################################################
+
+iterable = list(range(0,x-6)) 
+# NB -6 because we don't have pv polygons for Daintree, Laura or Blackwood1, and we don't want to run the testing site
 
 # Loop through all of our study sites
 for num in iterable:
     Studysite = names.ix[num]
     print ('Working on ' + Studysite.Name)
-
     # Because we have cut up the bounding boxes, there is no longer a relationship between the location of a site in 
     # our rainfall data csv and bounding box csv. We will set up an index so that it's still correct
     if 0 <= num <=3:
@@ -310,9 +330,8 @@ for num in iterable:
     elif 44 <= num <=45:
         bomnum = 8
         print('Using data from' + wetdry_times.name[bomnum])
-    
-    # Now we can do dry years...
-    dry_date = wetdry_times.dry[num]
+    # Now do the dry years...
+    dry_date = wetdry_times.dry[bomnum]
     dry_date = dry_date.split("'")
     xx = len(dry_date)-1
     dry_times = list(range(1,xx,2))
@@ -332,8 +351,8 @@ for num in iterable:
         #Define wavelengths/bands of interest, remove this kwarg to retrieve all bands
         #bands_of_interest = [#'blue',
                          #'green',
-                         #'red', 
-                         #'nir',
+                         'red', 
+                         'nir',
                          #'swir1', 
                          #'swir2',
         #                     ]
@@ -346,68 +365,77 @@ for num in iterable:
 
         # Grab NDVI data from the datacube and filter it for pixel quality
         dc = datacube.Datacube(app='poly-drill-recipe')
+        sensor_all = len(sensor)
+        sens = 1
+        for sensor_iterable in range (0,sensor_all):
         #Retrieve the data and pixel quality (PQ) data for sensor n
-        #Load the NDVI and corresponding PQ
-        ndvi = dc.load(product= 'ls5_ndvi_albers', group_by='solar_day', **query)
-        sensor_pq = dc.load(product= 'ls5_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+             nbar = dc.load(product = sensor_iterable +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+             if nbar :    
+                pq = dc.load(product = sensor_iterable +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+                crs = nbar.crs.wkt
+                affine = nbar.affine
+                # Filter the data to remove bad pixels
+                nbar = return_good_pixels(nbar, pq)
+                ndvi = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
+                if sens == 1:
+                    allsens = ndvi
+                if sens == 2:
+                    allsens = xr.concat(ndvi, allsens, dim = 'new_dim')
+                else:
+                    nbar = xr.concat([ndvi], dim = 'new_dim')
+                    allsens = xr.concat([allsens, ndvi],dim = 'new_dim')
+                print(allsens)
+                sens = sens + 1
+ 
+                if allsens:
+                    datamean = allsens.mean(dim = 'new_dim') 
+                    # Create the mask based on our shapefile
+                    mask = geometry_mask(warp_geometry(shp_union, shp.crs, ndvi.crs.wkt), ndvi.geobox, invert=True)
+                    # Get data only where the mask is 'true'
+                    data_masked = datamean.where(mask)
+                    # Get data only where the mask is 'false'
+                    data_maskedF = datamean.where(~ mask)
 
-        # Need to check if there is actually data there, or it will kill the loop!
-        # if there is actually data, do the analysis
-        if ndvi:   
-            # Filter the data to remove bad pixels
-            quality_ndvi = return_good_pixels(ndvi, sensor_pq, start_date, end_date)
-            # Create a time mean to make our data smaller to save memory
-            datamean = quality_ndvi.mean(dim = 'time')
-            # The NDVI data is stored with values between -10000 and 10000. To change this to -1 to 1, we need to divide by 10000.
-            datamean = datamean / 10000.
+                    # Create a new numpy array with just the ndvi values
+                    data_masked2 = np.array(data_masked.ndvi)
+                    data_maskedF2 = np.array(data_maskedF.ndvi)
+                    # Grab only values that aren't nan
+                    data_masked_nonan = data_masked2[~np.isnan(data_masked2)]
+                    data_maskedF_nonan = data_maskedF2[~np.isnan(data_maskedF2)]
+                    masked_both = [data_masked_nonan,data_maskedF_nonan]
 
-            # Create the mask based on our shapefile
-            mask = geometry_mask(warp_geometry(shp_union, shp.crs, ndvi.crs.wkt), ndvi.geobox, invert=True)
-            # Get data only where the mask is 'true'
-            data_masked = datamean.where(mask)
-            # Get data only where the mask is 'false'
-            data_maskedF = datamean.where(~ mask)
+                    # Test with an unpaired t-test. Equal var is false because our populations are different sizes
+                    # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
+                    stats_ttest, ttestpval = scipy.stats.ttest_ind(data_masked_nonan,data_maskedF_nonan, equal_var = 'False')
 
-            # Create a new numpy array with just the ndvi values
-            data_masked2 = np.array(data_masked.ndvi)
-            data_maskedF2 = np.array(data_maskedF.ndvi)
-            # Grab only values that aren't nan
-            data_masked_nonan = data_masked2[~np.isnan(data_masked2)]
-            data_maskedF_nonan = data_maskedF2[~np.isnan(data_maskedF2)]
-            masked_both = [data_masked_nonan,data_maskedF_nonan]
+                    # Test with a Kolmogorov-Smirnov test 
+                    # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
+                    stats_KS, KSpval = scipy.stats.ks_2samp(data_masked_nonan,data_maskedF_nonan)
 
-            # Test with an unpaired t-test. Equal var is false because our populations are different sizes
-            # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
-            stats_ttest, ttestpval = scipy.stats.ttest_ind(data_masked_nonan,data_maskedF_nonan, equal_var = 'False')
-
-            # Test with a Kolmogorov-Smirnov test 
-            # Our null hypothesis that 2 independent samples are drawn from the same continuous distribution
-            stats_KS, KSpval = scipy.stats.ks_2samp(data_masked_nonan,data_maskedF_nonan)
-
-            # Pull together everything we want in our csv file
-            row = [Studysite.Name, start_date, stats_ttest, stats_KS]
-            # Write our stats to a csv file so we can compare them later
-            # If this is the first site, make a new file, otherwise, append the existing file
-            if times == 1 and Studysite.Name == 'Blackwood2A':
-                with open('NDVI_dry.csv','w') as csvFile:
-                    writer = csv.writer(csvFile)
-                    header = ['name', 'start date', 'ttest', 'KS test']
-                    writer.writerow(header)
-                    writer.writerow(row)
+                    # Pull together everything we want in our csv file
+                    row = [Studysite.Name, start_date, stats_ttest, stats_KS]
+                    # Write our stats to a csv file so we can compare them later
+                    # If this is the first site, make a new file, otherwise, append the existing file
+                    if times == 1 and Studysite.Name == 'Blackwood2A':
+                        with open(OUTPUT_dry,'w') as csvFile:
+                            writer = csv.writer(csvFile)
+                            header = ['name', 'start date', 'ttest', 'KS test']
+                            writer.writerow(header)
+                            writer.writerow(row)
+                    else:
+                        with open(OUTPUT_dry,'a') as csvFile:
+                            writer = csv.writer(csvFile)
+                            writer.writerow(row)
+           # Or if there is no data...
             else:
-                with open('NDVI_dry.csv','a') as csvFile:
-                    writer = csv.writer(csvFile)
-                    writer.writerow(row)
-        # Or if there is no data...
-        else:
-            row = [Studysite.Name, start_date, 'no data', 'no data']
-            if times == 1 and Studysite.Name == 'Blackwood2A':
-                with open('NDVI_dry.csv','w') as csvFile:
-                    writer = csv.writer(csvFile)
-                    header = ['name', 'start date', 'ttest', 'KS test']
-                    writer.writerow(header)
-                    writer.writerow(row)
-            else:
-                with open('NDVI_dry.csv','a') as csvFile:
-                    writer = csv.writer(csvFile)
-                    writer.writerow(row)
+                row = [Studysite.Name, start_date, 'no data', 'no data']
+                if times == 1 and Studysite.Name == 'Blackwood2A':
+                    with open(OUTPUT_dry,'w') as csvFile:
+                        writer = csv.writer(csvFile)
+                        header = ['name', 'start date', 'ttest', 'KS test']
+                        writer.writerow(header)
+                        writer.writerow(row)
+                else:
+                    with open(OUTPUT_dry,'a') as csvFile:
+                        writer = csv.writer(csvFile)
+                        writer.writerow(row)
