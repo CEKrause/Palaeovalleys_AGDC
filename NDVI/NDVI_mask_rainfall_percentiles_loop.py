@@ -243,30 +243,35 @@ for num in iterable:
         #Retrieve the data and pixel quality (PQ) data for sensor n
              nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
              if nbar :    
-                pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-                crs = nbar.crs.wkt
-                affine = nbar.affine
-                # Filter the data to remove bad pixels
-                nbar = return_good_pixels(nbar, pq)
-                ndvi = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
-                if sens == 1:
-                    allsens = ndvi
-                if sens == 2:
-                    allsens = xr.concat(ndvi, allsens, dim = 'new_dim')
-                else:
-                    nbar = xr.concat([ndvi], dim = 'new_dim')
-                    allsens = xr.concat([allsens, ndvi],dim = 'new_dim')
-                print(allsens)
-                sens = sens + 1
- 
-        if allsens.any():
+                 pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+                 crs = nbar.crs.wkt
+                 affine = nbar.affine
+                 geobox = nbar.geobox
+                 # Filter the data to remove bad pixels
+                 nbar = return_good_pixels(nbar, pq)
+                 nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
+                 if sens == 1:
+                     allsens = nbar
+                     sens = sens + 1
+                 elif sens == 2:
+                     allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                     sens = sens + 1
+                 else:
+                     nbar = xr.concat([nbar], dim = 'new_dim')
+                     allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                     sens = sens + 1                 
+        if sens >= 3:
             datamean = allsens.mean(dim = 'new_dim') 
+            datamean = datamean.mean(dim = 'time')
+        else:
+            datamean = allsens.mean(dim = 'time')
+
+        if datamean.any():
             # Create the mask based on our shapefile
-            print(shp.crs)
-            print(nbar.crs.wkt)
-            mask = geometry_mask(warp_geometry(shp_union, shp.crs, nbar.crs.wkt), nbar.geobox, invert=True)
+            mask = geometry_mask(warp_geometry(shp_union, shp.crs, crs), geobox, invert=True)
             # Get data only where the mask is 'true'
             data_masked = datamean.where(mask)
+            print('data_masked', data_masked)
             # Get data only where the mask is 'false'
             data_maskedF = datamean.where(~ mask)
 
@@ -347,28 +352,34 @@ for num in iterable:
         sens = 1
         for sensor_iterable in range (0,sensor_all):
         #Retrieve the data and pixel quality (PQ) data for sensor n
-             nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-             if nbar :    
-                pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-                crs = nbar.crs.wkt
-                affine = nbar.affine
-                # Filter the data to remove bad pixels
-                nbar = return_good_pixels(nbar, pq)
-                ndvi = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
-                if sens == 1:
-                    allsens = ndvi
-                if sens == 2:
-                    allsens = xr.concat(ndvi, allsens, dim = 'new_dim')
-                else:
-                    nbar = xr.concat([ndvi], dim = 'new_dim')
-                    allsens = xr.concat([allsens, ndvi],dim = 'new_dim')
-                print(allsens)
-                sens = sens + 1
- 
-        if allsens.any():
+            nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+            if nbar :    
+               pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+               crs = nbar.crs.wkt
+               affine = nbar.affine
+               geobox = nbar.geobox
+               # Filter the data to remove bad pixels
+               nbar = return_good_pixels(nbar, pq)
+               nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
+               if sens == 1:
+                   allsens = nbar
+                   sens = sens + 1
+               elif sens == 2:
+                   allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                   sens = sens + 1
+               else:
+                   nbar = xr.concat([nbar], dim = 'new_dim')
+                   allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                   sens = sens + 1
+        if sens >= 3:
             datamean = allsens.mean(dim = 'new_dim') 
+            datamean = datamean.mean(dim = 'time')
+        else:
+            datamean = allsens.mean(dim = 'time')
+
+        if datamean.any():
             # Create the mask based on our shapefile
-            mask = geometry_mask(warp_geometry(shp_union, shp.crs, nbar.crs.wkt), nbar.geobox, invert=True)
+            mask = geometry_mask(warp_geometry(shp_union, shp.crs, crs), geobox, invert=True)
             # Get data only where the mask is 'true'
             data_masked = datamean.where(mask)
             # Get data only where the mask is 'false'
