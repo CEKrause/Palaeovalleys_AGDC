@@ -308,130 +308,147 @@ dir_check = os.path.isdir(pathnamedir)
 if dir_check == False:
     os.makedirs(pathnamedir)
 
-query = {'lat': (names.maxlat[num], names.minlat[num]), 
-         'lon': (names.minlon[num], names.maxlon[num]),
-         'crs': 'EPSG:4326'}
+# Check for any individual files from previous runs
+if os.path.isdir(pathnamedir):
+    os.remove(pathname + '/*')
+    print('Cleaning up old individual files for ' + Studysite.Name)
 
-#Retrieve the NBAR and PQ data for sensor 8
-# Check if directory exists, and if not, make it
-dir_check = os.path.isdir(pathname)
+# Check whether we already have the monthly concatenated data
+dir_check = os.path.isfile(concat_output_name)
 if dir_check == False:
-    os.makedirs(pathname)
-# And now grab the data...
-for time_period in pd.period_range(start_date, end_date, freq='M'):
-    query['time'] = (time_period.start_time, time_period.end_time)
-    nbar = dc.load(product= sensor8+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-    if nbar :    
-        pq = dc.load(product= sensor8+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-        crs = nbar.crs.wkt
-        affine = nbar.affine
-        # Filter the data to remove bad pixels
-        nbar = return_good_pixels(nbar, pq)
-        pq = None
-        # Create monthly averaged data
-        monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-        ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-        ds = ndvi.to_dataset(name='ndvi')
-        ds.attrs['affine'] = affine
-        ds.attrs['crs'] = crs
-        output_filename = OUTPUT_FILENAME8 % time_period.start_time.strftime('%Y-%m')
-        ds.to_netcdf(path=output_filename, mode='w')
-print('Finished getting data for sensor 8 for ' + Studysite.Name)
+    print ('No concat file, so we will grab them all from the cube')
+    query = {'lat': (names.maxlat[num], names.minlat[num]), 
+             'lon': (names.minlon[num], names.maxlon[num]),
+             'crs': 'EPSG:4326'}
 
-#Retrieve the NBAR and PQ data for sensor 7
-# Check if directory exists, and if not, make it
-dir_check = os.path.isdir(pathname)
-if dir_check == False:
-    os.makedirs(pathname)
+    #Retrieve the NBAR and PQ data for sensor 8
+    # Check if directory exists, and if not, make it
+    dir_check = os.path.isdir(pathname)
+    if dir_check == False:
+        os.makedirs(pathname)
+    # And now grab the data...
+    for time_period in pd.period_range(start_date, end_date, freq='M'):
+        query['time'] = (time_period.start_time, time_period.end_time)
+        nbar = dc.load(product= sensor8+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+        if nbar :    
+            pq = dc.load(product= sensor8+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+            crs = nbar.crs.wkt
+            affine = nbar.affine
+            # Filter the data to remove bad pixels
+            nbar = return_good_pixels(nbar, pq)
+            pq = None
+            # Create monthly averaged data
+            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+            ds = ndvi.to_dataset(name='ndvi')
+            ds.attrs['affine'] = affine
+            ds.attrs['crs'] = crs
+            output_filename = OUTPUT_FILENAME8 % time_period.start_time.strftime('%Y-%m')
+            ds.to_netcdf(path=output_filename, mode='w')
+    print('Finished getting data for sensor 8 for ' + Studysite.Name)
 
-for time_period in pd.period_range(start_date, end_date, freq='M'):
-    query['time'] = (time_period.start_time, time_period.end_time)
-    # print('Querying: %s' % query)
-    nbar = dc.load(product= sensor7+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-    if nbar :    
-        pq = dc.load(product= sensor7+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-        crs = nbar.crs.wkt
-        affine = nbar.affine
-        # Filter the data to remove bad pixels
-        nbar = return_good_pixels(nbar, pq)
-        pq = None
-        # Create monthly averaged data
-        monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-        ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-        ds = ndvi.to_dataset(name='ndvi')
-        ds.attrs['affine'] = affine
-        ds.attrs['crs'] = crs
-        output_filename = OUTPUT_FILENAME7 % time_period.start_time.strftime('%Y-%m')
-        ds.to_netcdf(path=output_filename, mode='w')    
-print('Finished getting data for sensor 7 for ' + Studysite.Name)
+    #Retrieve the NBAR and PQ data for sensor 7
+    # Check if directory exists, and if not, make it
+    dir_check = os.path.isdir(pathname)
+    if dir_check == False:
+        os.makedirs(pathname)
 
-
-#Retrieve the NBAR and PQ data for sensor 5
-
-# Check if directory exists, and if not, make it
-dir_check = os.path.isdir(pathname)
-if dir_check == False:
-    os.makedirs(pathname)
-for time_period in pd.period_range(start_date, end_date, freq='M'):
-    query['time'] = (time_period.start_time, time_period.end_time)
-    # print('Querying: %s' % query)
-    nbar = dc.load(product= sensor5+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-    if nbar :    
-        pq = dc.load(product= sensor5+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-        crs = nbar.crs.wkt
-        affine = nbar.affine
-        # Filter the data to remove bad pixels
-        nbar = return_good_pixels(nbar, pq)
-        pq = None
-        # Create monthly averaged data
-        monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-        ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-        ds = ndvi.to_dataset(name='ndvi')
-        ds.attrs['affine'] = affine
-        ds.attrs['crs'] = crs
-        output_filename = OUTPUT_FILENAME5 % time_period.start_time.strftime('%Y-%m')
-        ds.to_netcdf(path=output_filename, mode='w')    
-
-print('Finished getting data for sensor 5 for ' + Studysite.Name)
+    for time_period in pd.period_range(start_date, end_date, freq='M'):
+        query['time'] = (time_period.start_time, time_period.end_time)
+        # print('Querying: %s' % query)
+        nbar = dc.load(product= sensor7+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+        if nbar :    
+            pq = dc.load(product= sensor7+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+            crs = nbar.crs.wkt
+            affine = nbar.affine
+            # Filter the data to remove bad pixels
+            nbar = return_good_pixels(nbar, pq)
+            pq = None
+            # Create monthly averaged data
+            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+            ds = ndvi.to_dataset(name='ndvi')
+            ds.attrs['affine'] = affine
+            ds.attrs['crs'] = crs
+            output_filename = OUTPUT_FILENAME7 % time_period.start_time.strftime('%Y-%m')
+            ds.to_netcdf(path=output_filename, mode='w')    
+    print('Finished getting data for sensor 7 for ' + Studysite.Name)
 
 
-# Read in all the months and create monthly averages
-jans = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*01.nc', concat_dim='time')
-jan = jans.mean(dim = 'time')
-febs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*02.nc', concat_dim='time')
-feb = febs.mean(dim = 'time')
-mars = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*03.nc', concat_dim='time')
-mar = mars.mean(dim = 'time')
-aprs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*04.nc', concat_dim='time')
-apr = aprs.mean(dim = 'time')
-mays = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*05.nc', concat_dim='time')
-may = mays.mean(dim = 'time')
-juns = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*06.nc', concat_dim='time')
-jun = juns.mean(dim = 'time')
-juls = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*07.nc', concat_dim='time')
-jul = juls.mean(dim = 'time')
-augs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*08.nc', concat_dim='time')
-aug = augs.mean(dim = 'time')
-seps = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*09.nc', concat_dim='time')
-sep = seps.mean(dim = 'time')
-octs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*10.nc', concat_dim='time')
-octs = octs.mean(dim = 'time')
-novs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*11.nc', concat_dim='time')
-nov = novs.mean(dim = 'time')
-decs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*12.nc', concat_dim='time')
-dec = decs.mean(dim = 'time')
+    #Retrieve the NBAR and PQ data for sensor 5
 
-#Concatenate and sort the different sensor xarrays into a single xarray
-ndvi_monthly = xr.concat([jan['ndvi'], feb['ndvi'], mar['ndvi'], apr['ndvi'], may['ndvi'], jun['ndvi'],
-                          jul['ndvi'], aug['ndvi'], sep['ndvi'], octs['ndvi'], nov['ndvi'], dec['ndvi']], 'month')
+    # Check if directory exists, and if not, make it
+    dir_check = os.path.isdir(pathname)
+    if dir_check == False:
+        os.makedirs(pathname)
+    for time_period in pd.period_range(start_date, end_date, freq='M'):
+        query['time'] = (time_period.start_time, time_period.end_time)
+        # print('Querying: %s' % query)
+        nbar = dc.load(product= sensor5+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+        if nbar :    
+            pq = dc.load(product= sensor5+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+            crs = nbar.crs.wkt
+            affine = nbar.affine
+            # Filter the data to remove bad pixels
+            nbar = return_good_pixels(nbar, pq)
+            pq = None
+            # Create monthly averaged data
+            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+            ds = ndvi.to_dataset(name='ndvi')
+            ds.attrs['affine'] = affine
+            ds.attrs['crs'] = crs
+            output_filename = OUTPUT_FILENAME5 % time_period.start_time.strftime('%Y-%m')
+            ds.to_netcdf(path=output_filename, mode='w')    
 
-# Save the outputs so that we don't need to keep running this script
-ds = ndvi_monthly.to_dataset(name='ndvi')
-ds.attrs['affine'] = affine
-ds.attrs['crs'] = crs
-output_filename = concat_output_name
-ds.to_netcdf(path = output_filename, mode = 'w')
-print('Saved monthly averages for ' + Studysite.Name)
+    print('Finished getting data for sensor 5 for ' + Studysite.Name)
+
+
+    # Read in all the months and create monthly averages
+    jans = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*01.nc', concat_dim='time')
+    jan = jans.mean(dim = 'time')
+    febs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*02.nc', concat_dim='time')
+    feb = febs.mean(dim = 'time')
+    mars = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*03.nc', concat_dim='time')
+    mar = mars.mean(dim = 'time')
+    aprs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*04.nc', concat_dim='time')
+    apr = aprs.mean(dim = 'time')
+    mays = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*05.nc', concat_dim='time')
+    may = mays.mean(dim = 'time')
+    juns = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*06.nc', concat_dim='time')
+    jun = juns.mean(dim = 'time')
+    juls = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*07.nc', concat_dim='time')
+    jul = juls.mean(dim = 'time')
+    augs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*08.nc', concat_dim='time')
+    aug = augs.mean(dim = 'time')
+    seps = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*09.nc', concat_dim='time')
+    sep = seps.mean(dim = 'time')
+    octs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*10.nc', concat_dim='time')
+    octs = octs.mean(dim = 'time')
+    novs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*11.nc', concat_dim='time')
+    nov = novs.mean(dim = 'time')
+    decs = xr.open_mfdataset('/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/*12.nc', concat_dim='time')
+    dec = decs.mean(dim = 'time')
+
+    #Concatenate and sort the different sensor xarrays into a single xarray
+    ndvi_monthly = xr.concat([jan['ndvi'], feb['ndvi'], mar['ndvi'], apr['ndvi'], may['ndvi'], jun['ndvi'],
+                              jul['ndvi'], aug['ndvi'], sep['ndvi'], octs['ndvi'], nov['ndvi'], dec['ndvi']], 'month')
+
+    # Save the outputs so that we don't need to keep running this script
+    ds = ndvi_monthly.to_dataset(name='ndvi')
+    ds.attrs['affine'] = affine
+    ds.attrs['crs'] = crs
+    output_filename = concat_output_name
+    ds.to_netcdf(path = output_filename, mode = 'w')
+    print('Saved monthly averages for ' + Studysite.Name)
+else:
+    print('The concat file is there, so lets open that')
+    ndvi_monthly = xr.open_dataset(concat_output_name)
+
+print('Now to the rest of the code...')
+# Clean up the individual files to save memory
+os.remove(pathname + '/*')
+print('Finished with individual files for ' + Studysite.Name)
 
 #Define a dictionary for months
 monthDict={'January':0, 'February':1, 'March':2, 'April':3, 'May':4, 'June':5, 'July':6, 'August':7, 'September':8,
@@ -440,41 +457,38 @@ monthDict={'January':0, 'February':1, 'March':2, 'April':3, 'May':4, 'June':5, '
 #Split pull out all of the months of interest using the function defined above
 split_data = month_cut(ndvi_monthly, month_1, month_2)
 #Now perform the linear regression
+print('Calculating slope and p values')
 slope_xr, p_val_xr = linear_regression_grid(split_data, mask_no_trend = True)
 
 # Save the outputs so that we don't need to keep running this script
 ds = p_val_xr.to_dataset(name='p_val')
-ds.attrs['affine'] = affine
-ds.attrs['crs'] = crs
+ds.attrs['affine'] = ndvi_monthly.affine
+ds.attrs['crs'] = ndvi_monthly.crs.wkt
 output_filename = pval_output_name
 ds.to_netcdf(path = output_filename, mode = 'w')
 print('wrote %s' % output_filename)
 
 ds = slope_xr.to_dataset(name='slope')
-ds.attrs['affine'] = affine
-ds.attrs['crs'] = crs
+ds.attrs['affine'] = ndvi_monthly.affine
+ds.attrs['crs'] = ndvi_monthly.crs.wkt
 output_filename = slope_output_name
 ds.to_netcdf(path = output_filename, mode = 'w')
 print('wrote %s' % output_filename)
 
 #Write the files out into a tif file for viewing in GIS
 # You may need to adjust the default_profile values so that blockysize is not larger than the xr spatial dimensions
-print(ds)
-outfile = geotiff_output_name
+#print(ds)
+#outfile = geotiff_output_name
 
 #Function below is from https://github.com/data-cube/agdc-v2/blob/develop/datacube/helpers.py
-DEFAULT_PROFILE = {
-    'blockxsize': 128,
-    'blockysize': 128,
-    'compress': 'lzw',
-    'driver': 'GTiff',
-    'interleave': 'band',
-    'nodata': 0.0,
-    'photometric': 'RGBA',
-    'tiled': True}
+#DEFAULT_PROFILE = {
+#    'blockxsize': 128,
+#    'blockysize': 128,
+#    'compress': 'lzw',
+#    'driver': 'GTiff',
+#    'interleave': 'band',
+#    'nodata': 0.0,
+#    'photometric': 'RGBA',
+#    'tiled': True}
 
-write_geotiff(outfile, ds)
-
-# Clean up the individual files to save memory
-os.remove(pathname + '/*')
-print('Finished with ' + Studysite.Name)
+#write_geotiff(outfile, ds)
