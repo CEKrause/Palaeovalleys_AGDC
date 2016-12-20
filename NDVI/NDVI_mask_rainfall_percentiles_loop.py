@@ -156,13 +156,13 @@ def find_bomnum_index(num):
 
 def write_to_csv(times, OUTPUT_path, row):
     if times == 1 and Studysite.Name == 'Blackwood2A':
-        with open(OUTPUT_wet,'w') as csvFile:
+        with open(OUTPUT_path,'w') as csvFile:
             writer = csv.writer(csvFile)
             header = ['name', 'start date', 'ttest', 'KS test']
             writer.writerow(header)
             writer.writerow(row)
     else:
-        with open(OUTPUT_wet,'a') as csvFile:
+        with open(OUTPUT_path,'a') as csvFile:
            writer = csv.writer(csvFile)
            writer.writerow(row)
 
@@ -241,34 +241,36 @@ for num in iterable:
         dc = datacube.Datacube(app='poly-drill-recipe')
         sensor_all = len(sensor)
         sens = 1
+        data_check = False
         for sensor_iterable in range (0,sensor_all):
         #Retrieve the data and pixel quality (PQ) data for sensor n
              nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
              if nbar :    
-                pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-                crs = nbar.crs.wkt
-                affine = nbar.affine
-                geobox = nbar.geobox
-                # Filter the data to remove bad pixels
-                nbar = return_good_pixels(nbar, pq)
-                nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
-                # Calculate the mean for each sensor, then later, the mean for all sensors.
-                nbar = nbar.mean(dim = 'time')
-                if sens == 1:
-                    allsens = nbar
-                    sens = sens + 1
-                elif sens == 2:
-                    allsens = xr.concat([allsens, nbar], dim = 'new_dim')
-                    sens = sens + 1
-                else:
-                    nbar = xr.concat([nbar], dim = 'new_dim')
-                    allsens = xr.concat([allsens, nbar], dim = 'new_dim')
-                    sens = sens + 1    
-                print('sens = ', sens)
-                print(start_date)
-                if sens >= 3:
-                    allsens = allsens.mean(dim = 'new_dim') 
-        if allsens.any():
+                 data_check = True
+                 pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+                 crs = nbar.crs.wkt
+                 affine = nbar.affine
+                 geobox = nbar.geobox
+                 # Filter the data to remove bad pixels
+                 nbar = return_good_pixels(nbar, pq)
+                 nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
+                 # Calculate the mean for each sensor, then later, the mean for all sensors.
+                 nbar = nbar.mean(dim = 'time')
+                 if sens == 1:
+                     allsens = nbar
+                     sens = sens + 1
+                 elif sens == 2:
+                     allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                     sens = sens + 1
+                 else:
+                     nbar = xr.concat([nbar], dim = 'new_dim')
+                     allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                     sens = sens + 1    
+                 print('sens = ', sens)
+                 print(start_date)
+                 if sens >= 3:
+                     allsens = allsens.mean(dim = 'new_dim') 
+        if data_check == True:
             # Create the mask based on our shapefile
             mask = geometry_mask(warp_geometry(shp_union, shp.crs, crs), geobox, invert=True)
             # Get data only where the mask is 'true'
@@ -329,7 +331,7 @@ for num in iterable:
     dry_date = wetdry_times.dry[bomnum]
     dry_date = dry_date.split("'")
     xx = len(dry_date)-1
-    wet_times = list(range(1,xx,2))
+    dry_times = list(range(1,xx,2))
     for times in dry_times:
         # Create a bounding box from the locations specified above
         box = shapely.geometry.box(names.minlon[num], names.minlat[num], names.maxlon[num], names.maxlat[num], ccw = True)
@@ -362,34 +364,36 @@ for num in iterable:
         dc = datacube.Datacube(app='poly-drill-recipe')
         sensor_all = len(sensor)
         sens = 1
+        data_check = False
         for sensor_iterable in range (0,sensor_all):
         #Retrieve the data and pixel quality (PQ) data for sensor n
              nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
              if nbar :    
-                pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-                crs = nbar.crs.wkt
-                affine = nbar.affine
-                geobox = nbar.geobox
-                # Filter the data to remove bad pixels
-                nbar = return_good_pixels(nbar, pq)
-                nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
-                # Calculate the mean for each sensor, then later, the mean for all sensors.
-                nbar = nbar.mean(dim = 'time')
-                if sens == 1:
-                    allsens = nbar
-                    sens = sens + 1
-                elif sens == 2:
-                    allsens = xr.concat([allsens, nbar], dim = 'new_dim')
-                    sens = sens + 1
-                else:
-                    nbar = xr.concat([nbar], dim = 'new_dim')
-                    allsens = xr.concat([allsens, nbar], dim = 'new_dim')
-                    sens = sens + 1    
-                print('sens = ', sens)
-                print(start_date)
-                if sens >= 3:
-                    allsens = allsens.mean(dim = 'new_dim') 
-        if allsens.any():
+                 data_check = True
+                 pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+                 crs = nbar.crs.wkt
+                 affine = nbar.affine
+                 geobox = nbar.geobox
+                 # Filter the data to remove bad pixels
+                 nbar = return_good_pixels(nbar, pq)
+                 nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
+                 # Calculate the mean for each sensor, then later, the mean for all sensors.
+                 nbar = nbar.mean(dim = 'time')
+                 if sens == 1:
+                     allsens = nbar
+                     sens = sens + 1
+                 elif sens == 2:
+                     allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                     sens = sens + 1
+                 else:
+                     nbar = xr.concat([nbar], dim = 'new_dim')
+                     allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                     sens = sens + 1    
+                 print('sens = ', sens)
+                 print(start_date)
+                 if sens >= 3:
+                     allsens = allsens.mean(dim = 'new_dim') 
+        if data_check == True:
             # Create the mask based on our shapefile
             mask = geometry_mask(warp_geometry(shp_union, shp.crs, crs), geobox, invert=True)
             # Get data only where the mask is 'true'
@@ -418,12 +422,12 @@ for num in iterable:
             # Write our stats to a csv file so we can compare them later
             # If this is the first site, make a new file, otherwise, append the existing file
             print('writing to csv')
-            write_to_csv(times, OUTPUT_wet, row)
+            write_to_csv(times, OUTPUT_dry, row)
         # Or if there is no data...
         else:
             print('writing no data to csv')
             row = [Studysite.Name, start_date, 'no data', 'no data']
-            write_to_csv(times, OUTPUT_wet, row)
+            write_to_csv(times, OUTPUT_dry, row)
     nbar = None
     pq = None
     data_masked_nonan = None
