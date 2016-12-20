@@ -188,13 +188,15 @@ wetdry_times = pandas.read_csv(rainfall_percentiles, delimiter = ',')
 shp = gp.GeoDataFrame.from_file(polygon_path)
 print('files read in')
 
-################################## Start with wet years ##############################################################
+############################################################################################
+############## Work on the wet years first #################################################
+############################################################################################
 
 # Work out how many sites we want to analyse, and set up a list of numbers we can loop through
 x = len(names.index)
 iterable = list(range(0,x-6)) 
 # NB -6 because we don't have pv polygons for Daintree, Laura or Blackwood1, and we don't want to run the testing site
-# Loop through all of our study sites
+
 for num in iterable:
     Studysite = names.ix[num]
     print ('Working on ' + Studysite.Name)
@@ -202,7 +204,7 @@ for num in iterable:
     # our rainfall data csv and bounding box csv. We will set up an index so that it's still correct
     bomnum = find_bomnum_index(num)
     print('Using data from' + wetdry_times.name[bomnum])
-    # Let's start with wet years...
+    # Now wet years...
     wet_date = wetdry_times.wet[bomnum]
     wet_date = wet_date.split("'")
     xx = len(wet_date)-1
@@ -243,37 +245,36 @@ for num in iterable:
         #Retrieve the data and pixel quality (PQ) data for sensor n
              nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
              if nbar :    
-                 pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-                 crs = nbar.crs.wkt
-                 affine = nbar.affine
-                 geobox = nbar.geobox
-                 # Filter the data to remove bad pixels
-                 nbar = return_good_pixels(nbar, pq)
-                 nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
-                 if sens == 1:
-                     allsens = nbar
-                     sens = sens + 1
-                 elif sens == 2:
-                     allsens = xr.concat([allsens, nbar], dim = 'new_dim')
-                     sens = sens + 1
-                 else:
-                     nbar = xr.concat([nbar], dim = 'new_dim')
-                     allsens = xr.concat([allsens, nbar], dim = 'new_dim')
-                     sens = sens + 1                 
-        if sens >= 3:
-            datamean = allsens.mean(dim = 'new_dim') 
-            datamean = datamean.mean(dim = 'time')
-        else:
-            datamean = allsens.mean(dim = 'time')
-
-        if datamean.any():
+                pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+                crs = nbar.crs.wkt
+                affine = nbar.affine
+                geobox = nbar.geobox
+                # Filter the data to remove bad pixels
+                nbar = return_good_pixels(nbar, pq)
+                nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
+                # Calculate the mean for each sensor, then later, the mean for all sensors.
+                nbar = nbar.mean(dim = 'time')
+                if sens == 1:
+                    allsens = nbar
+                    sens = sens + 1
+                elif sens == 2:
+                    allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                    sens = sens + 1
+                else:
+                    nbar = xr.concat([nbar], dim = 'new_dim')
+                    allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                    sens = sens + 1    
+                print('sens = ', sens)
+                print(start_date)
+                if sens >= 3:
+                    allsens = allsens.mean(dim = 'new_dim') 
+        if allsens.any():
             # Create the mask based on our shapefile
             mask = geometry_mask(warp_geometry(shp_union, shp.crs, crs), geobox, invert=True)
             # Get data only where the mask is 'true'
-            data_masked = datamean.where(mask)
-            print('data_masked', data_masked)
+            data_masked = allsens.where(mask)
             # Get data only where the mask is 'false'
-            data_maskedF = datamean.where(~ mask)
+            data_maskedF = allsens.where(~ mask)
 
             # Create a new numpy array with just the ndvi values
             data_masked2 = np.array(data_masked.ndvi)
@@ -295,17 +296,28 @@ for num in iterable:
             row = [Studysite.Name, start_date, stats_ttest, stats_KS]
             # Write our stats to a csv file so we can compare them later
             # If this is the first site, make a new file, otherwise, append the existing file
+            print('writing to csv')
             write_to_csv(times, OUTPUT_wet, row)
         # Or if there is no data...
         else:
+            print('writing no data to csv')
             row = [Studysite.Name, start_date, 'no data', 'no data']
             write_to_csv(times, OUTPUT_wet, row)
+    nbar = None
+    pq = None
+    data_masked_nonan = None
+    data_maskedF_nonan = None
+    allsens = None
 
-###################################### Now dry years #################################################
+############################################################################################
+############## Work on the dry years #######################################################
+############################################################################################
 
+# Work out how many sites we want to analyse, and set up a list of numbers we can loop through
+x = len(names.index)
 iterable = list(range(0,x-6)) 
 # NB -6 because we don't have pv polygons for Daintree, Laura or Blackwood1, and we don't want to run the testing site
-# Loop through all of our study sites
+
 for num in iterable:
     Studysite = names.ix[num]
     print ('Working on ' + Studysite.Name)
@@ -313,11 +325,11 @@ for num in iterable:
     # our rainfall data csv and bounding box csv. We will set up an index so that it's still correct
     bomnum = find_bomnum_index(num)
     print('Using data from' + wetdry_times.name[bomnum])
-    # Let's start with wet years...
+    # Now dry years...
     dry_date = wetdry_times.dry[bomnum]
     dry_date = dry_date.split("'")
     xx = len(dry_date)-1
-    dry_times = list(range(1,xx,2))
+    wet_times = list(range(1,xx,2))
     for times in dry_times:
         # Create a bounding box from the locations specified above
         box = shapely.geometry.box(names.minlon[num], names.minlat[num], names.maxlon[num], names.maxlat[num], ccw = True)
@@ -352,38 +364,38 @@ for num in iterable:
         sens = 1
         for sensor_iterable in range (0,sensor_all):
         #Retrieve the data and pixel quality (PQ) data for sensor n
-            nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
-            if nbar :    
-               pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-               crs = nbar.crs.wkt
-               affine = nbar.affine
-               geobox = nbar.geobox
-               # Filter the data to remove bad pixels
-               nbar = return_good_pixels(nbar, pq)
-               nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
-               if sens == 1:
-                   allsens = nbar
-                   sens = sens + 1
-               elif sens == 2:
-                   allsens = xr.concat([allsens, nbar], dim = 'new_dim')
-                   sens = sens + 1
-               else:
-                   nbar = xr.concat([nbar], dim = 'new_dim')
-                   allsens = xr.concat([allsens, nbar], dim = 'new_dim')
-                   sens = sens + 1
-        if sens >= 3:
-            datamean = allsens.mean(dim = 'new_dim') 
-            datamean = datamean.mean(dim = 'time')
-        else:
-            datamean = allsens.mean(dim = 'time')
-
-        if datamean.any():
+             nbar = dc.load(product = sensor[sensor_iterable] +'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
+             if nbar :    
+                pq = dc.load(product = sensor[sensor_iterable] +'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
+                crs = nbar.crs.wkt
+                affine = nbar.affine
+                geobox = nbar.geobox
+                # Filter the data to remove bad pixels
+                nbar = return_good_pixels(nbar, pq)
+                nbar['ndvi'] = (nbar['nir'] - nbar['red']) / (nbar['nir'] + nbar['red'])
+                # Calculate the mean for each sensor, then later, the mean for all sensors.
+                nbar = nbar.mean(dim = 'time')
+                if sens == 1:
+                    allsens = nbar
+                    sens = sens + 1
+                elif sens == 2:
+                    allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                    sens = sens + 1
+                else:
+                    nbar = xr.concat([nbar], dim = 'new_dim')
+                    allsens = xr.concat([allsens, nbar], dim = 'new_dim')
+                    sens = sens + 1    
+                print('sens = ', sens)
+                print(start_date)
+                if sens >= 3:
+                    allsens = allsens.mean(dim = 'new_dim') 
+        if allsens.any():
             # Create the mask based on our shapefile
             mask = geometry_mask(warp_geometry(shp_union, shp.crs, crs), geobox, invert=True)
             # Get data only where the mask is 'true'
-            data_masked = datamean.where(mask)
+            data_masked = allsens.where(mask)
             # Get data only where the mask is 'false'
-            data_maskedF = datamean.where(~ mask)
+            data_maskedF = allsens.where(~ mask)
 
             # Create a new numpy array with just the ndvi values
             data_masked2 = np.array(data_masked.ndvi)
@@ -405,8 +417,15 @@ for num in iterable:
             row = [Studysite.Name, start_date, stats_ttest, stats_KS]
             # Write our stats to a csv file so we can compare them later
             # If this is the first site, make a new file, otherwise, append the existing file
-            write_to_csv(times, OUTPUT_dry, row)
+            print('writing to csv')
+            write_to_csv(times, OUTPUT_wet, row)
         # Or if there is no data...
         else:
+            print('writing no data to csv')
             row = [Studysite.Name, start_date, 'no data', 'no data']
-            write_to_csv(times, OUTPUT_dry, row)
+            write_to_csv(times, OUTPUT_wet, row)
+    nbar = None
+    pq = None
+    data_masked_nonan = None
+    data_maskedF_nonan = None
+    allsens = None
