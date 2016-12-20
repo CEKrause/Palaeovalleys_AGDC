@@ -309,13 +309,24 @@ if dir_check == False:
     os.makedirs(pathnamedir)
 
 # Check for any individual files from previous runs
-if os.path.isdir(pathnamedir):
-    os.remove(pathname + '/*')
+files = os.listdir(pathname)
+if files == []:
+    print(Studysite.Name + ' file clean')
+else:
+    #print(Studysite.Name + ' still has individual files')
     print('Cleaning up old individual files for ' + Studysite.Name)
+    os.chdir(pathname)
+    os.system('rm *')
+    print(Studysite.Name + 'file clean')
 
 # Check whether we already have the monthly concatenated data
-dir_check = os.path.isfile(concat_output_name)
-if dir_check == False:
+file_check = os.path.isfile(concat_output_name)
+
+# Need to also check the file was written properly
+if file_check == True:
+    size_check = os.path.getsize(concat_output_name)
+
+if (file_check == False) or (size_check < 99999):
     print ('No concat file, so we will grab them all from the cube')
     query = {'lat': (names.maxlat[num], names.minlat[num]), 
              'lon': (names.minlon[num], names.maxlon[num]),
@@ -446,12 +457,20 @@ else:
     ndvi_monthly = xr.open_dataset(concat_output_name)
 
 print('Now to the rest of the code...')
-# Clean up the individual files to save memory
-os.remove(pathname + '/*')
-print('Finished with individual files for ' + Studysite.Name)
+
+# Check for any individual files from previous runs
+files = os.listdir(pathname)
+if files == []:
+    print(Studysite.Name + ' file clean')
+else:
+    #print(Studysite.Name + ' still has individual files')
+    print('Cleaning up old individual files for ' + Studysite.Name)
+    os.chdir(pathname)
+    os.system('rm *')
+    print(Studysite.Name + 'file clean')
 
 #Define a dictionary for months
-monthDict={'January':0, 'February':1, 'March':2, 'April':3, 'May':4, 'June':5, 'July':6, 'August':7, 'September':8,
+monthDict = {'January':0, 'February':1, 'March':2, 'April':3, 'May':4, 'June':5, 'July':6, 'August':7, 'September':8,
            'October':9, 'November':10, 'December':11}
 
 #Split pull out all of the months of interest using the function defined above
