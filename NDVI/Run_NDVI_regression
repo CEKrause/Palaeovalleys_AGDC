@@ -31,7 +31,7 @@ module use /g/data/v10/public/modules/modulefiles
 
 module load agdc-py3-prod
 
-SECOND=$(qsub -W depend=afterany:$FIRST for i in {16..31}; do
+SECOND=$(qsub -W depend=afterok:$FIRST for i in {16..31}; do
  python Palaeovalley_NDVI_linear_regression_raijin.py $i > linear_regress_out_$i &
 done
 
@@ -50,7 +50,7 @@ module use /g/data/v10/public/modules/modulefiles
 
 module load agdc-py3-prod
 
-qsub -W depend=afterany:$SECOND 
+qsub -W depend=afterok:$SECOND 
 for i in {32..42}; do
  python Palaeovalley_NDVI_linear_regression_raijin.py $i > linear_regress_out_$i &
 done
