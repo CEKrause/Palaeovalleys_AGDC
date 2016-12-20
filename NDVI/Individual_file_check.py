@@ -1,0 +1,29 @@
+# Individual_file_check.py
+
+''' This code checks for files in the individual files folders
+'''
+
+import pandas
+import os
+
+# Set up the case study bounding box (to make the file smaller and avoid memory errors)
+names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimiter = ',')
+
+x = len(names)
+for num in range(0,x-6):
+    Studysite = names.ix[num]
+    print('Working on ' + Studysite.Name)
+
+    pathname = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual'
+
+    # Check for any individual files from previous runs
+    files = os.listdir(pathname)
+    if files == []:
+        print(Studysite.Name + ' file clean')
+    else:
+        #print(Studysite.Name + ' still has individual files')
+        print('Cleaning up old individual files for ' + Studysite.Name)
+        os.chdir(pathname)
+        os.system('rm *')
+        print(Studysite.Name + 'file clean')
+  
