@@ -1,6 +1,12 @@
 # Individual_file_check.py
 
-''' This code checks for files in the individual files folders
+''' This code checks for files in the individual files folders. It reads in the case
+study location names from a csv, and uses them to search through the prescribed folder
+structure. Ensure that the csv file read into the regression analysis is the same as that
+used here. 
+
+If you do not want to delete the individual files, but just find them, comment out the last
+four lines of this code.
 '''
 
 import pandas
