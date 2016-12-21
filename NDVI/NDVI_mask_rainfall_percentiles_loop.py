@@ -158,7 +158,7 @@ def write_to_csv(times, OUTPUT_path, row):
     if times == 1 and Studysite.Name == 'Blackwood2A':
         with open(OUTPUT_path,'w') as csvFile:
             writer = csv.writer(csvFile)
-            header = ['name', 'start date', 'ttest', 'KS test']
+            header = ['name', 'start_date', 'ttest', 'KS test']
             writer.writerow(header)
             writer.writerow(row)
     else:
@@ -303,7 +303,7 @@ for num in iterable:
         # Or if there is no data...
         else:
             print('writing no data to csv')
-            row = [Studysite.Name, start_date, 'no data', 'no data']
+            row = [Studysite.Name, start_date, 'nan', 'nan']
             write_to_csv(times, OUTPUT_wet, row)
     nbar = None
     pq = None
@@ -426,7 +426,7 @@ for num in iterable:
         # Or if there is no data...
         else:
             print('writing no data to csv')
-            row = [Studysite.Name, start_date, 'no data', 'no data']
+            row = [Studysite.Name, start_date, 'nan', 'nan']
             write_to_csv(times, OUTPUT_dry, row)
     nbar = None
     pq = None
