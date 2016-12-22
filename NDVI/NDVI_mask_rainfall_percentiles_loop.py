@@ -158,7 +158,7 @@ def write_to_csv(times, OUTPUT_path, row):
     if times == 1 and Studysite.Name == 'Blackwood2A':
         with open(OUTPUT_path,'w') as csvFile:
             writer = csv.writer(csvFile)
-            header = ['name', 'start_date', 'ttest', 'KS test']
+            header = ['name', 'start_date', 'ttest', 'KS_test']
             writer.writerow(header)
             writer.writerow(row)
     else:
