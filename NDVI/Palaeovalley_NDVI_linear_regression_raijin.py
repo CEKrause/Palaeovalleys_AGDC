@@ -20,6 +20,7 @@ Based on regression code from Neil Symington
 '''
 
 import datacube
+datacube.set_options(reproject_threads=1)
 import xarray as xr
 from datacube.storage import masking
 from datacube.storage.masking import mask_to_dict
@@ -39,6 +40,7 @@ from scipy import stats
 import os
 import numpy as np
 import sys
+from affine import Affine
 
 dc = datacube.Datacube(app='dc-example')
 
@@ -138,67 +140,44 @@ def add_ds_info(new_ds, old_ds):
     new_ds.attrs['affine'] = old_ds.affine
     new_ds.attrs['crs'] = old_ds.crs
 
-def linear_regression_grid(data_xr, mask_no_trend = True):
+def linear_regression_grid(input_array, mask_no_trend = True):
     '''
-    This function applies a linear regression to a grid over a set time interval by looping through lat, lon and time for each pixel.
+    This function applies a linear regression to a grid over a set time interval by looping through lat and lon 
+    and calculating the linear regression through time for each pixel.
     '''
-    arr = data_xr.values
-    print('arr shape is ' ,arr.shape)
-    #Build arrays in which to write the linear regression slopes and p=value
-    slopes = np.zeros(np.shape(arr[0]))
-    p_values = np.zeros(np.shape(arr[0]))
-    print('slopes and p_values empty arrays created')
-    #Iterate over the numpy array, running a linear regression on each pixel and writing the results into a separate array
-    for i in range(len(arr[0])):
-        for j in range(len(arr[0,0])):
-            l = []
-            #This flag is used to check if negatives are anywhere present for
-            # a given pixel
-            neg_check = False
-            for k in range(len(arr)):
-                val = arr[k][i][j]
-                l.append(val)
-                # If the list contains a negative raise the neg_check flag
-                if val < 0:
-                    neg_check = True
-                #If neg check has been removed, use the remove negs function to 
-                # remove the negative value and its index value from the list
-                if neg_check == True:
-                    x1, y1 = remove_negs(l)
-                    # Check that we have at least three values to perform our linear regression on
-                    if len(y1) >=3:
-                        slopes[i,j], intercept, r_sq, p_values[i,j] = linear_regression(x1,y1)
-                    else:
-                        slopes[i,j] = np.nan
-                        intercept = np.nan
-                        r_sq = np.nan
-                        p_values[i,j] = np.nan
-                #If there are no negatives then simply run the linear regression    
-                else:
-                    y1 = l
-                    x1 = np.arange(len(y1))
-                    if len(y1) >=3:
-                        slopes[i,j], intercept, r_sq, p_values[i,j] = linear_regression(x1,y1)
-                    else:
-                        slopes[i,j] = np.nan
-                        intercept = np.nan
-                        r_sq = np.nan
-                        p_values[i,j] = np.nan
+
+    ylen = len(input_array.y)
+    xlen = len(input_array.x)
+    from itertools import product
+    coordinates = product(range(ylen), range(xlen))
+
+    slopes = np.zeros((ylen, xlen))
+    p_values = np.zeros((ylen, xlen))
+    print('Slope shape is ', slopes.shape)
+
+    for y, x in coordinates:
+        val = input_array.isel(x = x, y = y)
+        val[val<0] = np.nan
+
+        # Check that we have at least three values to perform our linear regression on
+        if np.count_nonzero(~np.isnan(val)) > 3:
+            slopes[y, x], intercept, r_sq, p_values[y, x], std_err = stats.linregress(val.month,val)
+        else:
+            slopes[y, x] = np.nan
+            intercept = np.nan
+            r_sq = np.nan
+            p_values[y, x] = np.nan
+
     #Get coordinates from the original xarray
-    lat  = ndvi_monthly.coords['y']
-    long = ndvi_monthly.coords['x']
+    lat  = input_array.coords['y']
+    long = input_array.coords['x']
     #Mask out values with insignificant trends (ie. p-value > 0.05) if user wants
     if mask_no_trend == True:
         slopes[p_values>0.05]=np.nan        
     # Write arrays into a x-array
     slope_xr = xr.DataArray(slopes, coords = [lat, long], dims = ['y', 'x'])
-    p_val_xr = xr.DataArray(slopes, coords = [lat, long], dims = ['y', 'x']) 
+    p_val_xr = xr.DataArray(p_values, coords = [lat, long], dims = ['y', 'x']) 
     return slope_xr, p_val_xr
-
-def linear_regression(x, y):
-    slope, intercept, r_value, p_value, std_err = stats.linregress(x,y)
-    #Only return the slope, and p value
-    return slope, intercept, r_value**2, p_value
 
 def month_cut(data, month_1, month_2):
     sliced_xr = list(data.groupby('month'))[monthDict[month_1]:monthDict[month_2] + 1]
@@ -207,19 +186,6 @@ def month_cut(data, month_1, month_2):
     for i in range(int(monthDict[month_2]) - int(monthDict[month_1])):
         split_xr = xr.concat([split_xr, sliced_xr[i+1][1]], dim = 'month')      
     return split_xr
-
-def remove_negs(l):
-    ''' 
-    This function removes spurious negatives from the averaged data. Negative values in NDVI data usually
-    indicate water. 
-    '''
-    x = []
-    y = []
-    for i in range(len(l)):
-        if l[i] >= 0:
-            x.append(i)
-            y.append(l[i])
-    return x, y
 
 def write_geotiff(filename, dataset, time_index=None, profile_override=None):
     """
@@ -236,7 +202,7 @@ def write_geotiff(filename, dataset, time_index=None, profile_override=None):
     profile.update({
         'width': dataset.dims['x'],
         'height': dataset.dims['y'],
-        'affine': dataset.affine,
+        'transform': Affine(*slope.affine[:6]),
         #'crs': dataset.crs.crs_str,
         'crs': dataset.crs,
         'count': len(dataset.data_vars),
@@ -262,6 +228,7 @@ print(sys.argv)
 num = int(sys.argv[1])
 Studysite = names.ix[num]
 print('Working on ' + Studysite.Name)
+
 ########################################################################################
 ########### Set up your inputs and data query ##########################################
 ########################################################################################
@@ -282,6 +249,7 @@ sensor5 = 'ls5'
 # Set up the bounds for your AGDC data extraction
 start_date = '1980-01-01'
 end_date = '2016-12-31'
+
 OUTPUT_FILENAME8 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI8_month_%s.nc'
 OUTPUT_FILENAME7 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI7_month_%s.nc'
 OUTPUT_FILENAME5 = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/individual/NDVI5_month_%s.nc'
@@ -294,9 +262,9 @@ month_1 = 'February'
 #f you want to only look at one month then simply make month_1 equal to month_2
 month_2 = 'September'
 
-slope_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_slope.nc'
-pval_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_pVal.nc'
-geotiff_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_drying_trend.tiff'
+slope_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_slope.nc'
+pval_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_pVal.nc'
+geotiff_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_drying_trend.tiff'
 
 ##############################################################################################
 ### You shouldn't need to change anything below here #########################################
@@ -330,7 +298,7 @@ if (file_check == False) or (size_check < 99999):
     print ('No concat file, so we will grab them all from the cube')
     query = {'lat': (names.maxlat[num], names.minlat[num]), 
              'lon': (names.minlon[num], names.maxlon[num]),
-             'crs': 'EPSG:4326'}
+             'resolution': (-250, 250)}
 
     #Retrieve the NBAR and PQ data for sensor 8
     # Check if directory exists, and if not, make it
@@ -343,74 +311,67 @@ if (file_check == False) or (size_check < 99999):
         nbar = dc.load(product= sensor8+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
         if nbar :    
             pq = dc.load(product= sensor8+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-            crs = nbar.crs.wkt
-            affine = nbar.affine
-            # Filter the data to remove bad pixels
-            nbar = return_good_pixels(nbar, pq)
-            pq = None
-            # Create monthly averaged data
-            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-            ds = ndvi.to_dataset(name='ndvi')
-            ds.attrs['affine'] = affine
-            ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME8 % time_period.start_time.strftime('%Y-%m')
-            ds.to_netcdf(path=output_filename, mode='w')
+            if pq : # Only use nbar data that has accompanying pixel quality data
+                crs = nbar.crs.wkt
+                affine = nbar.affine
+                # Filter the data to remove bad pixels
+                nbar = return_good_pixels(nbar, pq)
+                pq = None
+                # Create monthly averaged data
+                monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+                ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+                ds = ndvi.to_dataset(name='ndvi')
+                ds.attrs['affine'] = affine
+                ds.attrs['crs'] = crs
+                output_filename = OUTPUT_FILENAME8 % time_period.start_time.strftime('%Y-%m')
+                ds.to_netcdf(path=output_filename, mode='w')
     print('Finished getting data for sensor 8 for ' + Studysite.Name)
 
     #Retrieve the NBAR and PQ data for sensor 7
-    # Check if directory exists, and if not, make it
-    dir_check = os.path.isdir(pathname)
-    if dir_check == False:
-        os.makedirs(pathname)
-
     for time_period in pd.period_range(start_date, end_date, freq='M'):
         query['time'] = (time_period.start_time, time_period.end_time)
         # print('Querying: %s' % query)
         nbar = dc.load(product= sensor7+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
         if nbar :    
             pq = dc.load(product= sensor7+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-            crs = nbar.crs.wkt
-            affine = nbar.affine
-            # Filter the data to remove bad pixels
-            nbar = return_good_pixels(nbar, pq)
-            pq = None
-            # Create monthly averaged data
-            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-            ds = ndvi.to_dataset(name='ndvi')
-            ds.attrs['affine'] = affine
-            ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME7 % time_period.start_time.strftime('%Y-%m')
-            ds.to_netcdf(path=output_filename, mode='w')    
+            if pq :
+                crs = nbar.crs.wkt
+                affine = nbar.affine
+                # Filter the data to remove bad pixels
+                nbar = return_good_pixels(nbar, pq)
+                pq = None
+                # Create monthly averaged data
+                monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+                ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+                ds = ndvi.to_dataset(name='ndvi')
+                ds.attrs['affine'] = affine
+                ds.attrs['crs'] = crs
+                output_filename = OUTPUT_FILENAME7 % time_period.start_time.strftime('%Y-%m')
+                ds.to_netcdf(path=output_filename, mode='w')    
     print('Finished getting data for sensor 7 for ' + Studysite.Name)
 
 
     #Retrieve the NBAR and PQ data for sensor 5
-
-    # Check if directory exists, and if not, make it
-    dir_check = os.path.isdir(pathname)
-    if dir_check == False:
-        os.makedirs(pathname)
     for time_period in pd.period_range(start_date, end_date, freq='M'):
         query['time'] = (time_period.start_time, time_period.end_time)
         # print('Querying: %s' % query)
         nbar = dc.load(product= sensor5+'_nbar_albers', group_by='solar_day', measurements = bands_of_interest,  **query)
         if nbar :    
             pq = dc.load(product= sensor5+'_pq_albers', group_by='solar_day', fuse_func=pq_fuser, **query)
-            crs = nbar.crs.wkt
-            affine = nbar.affine
-            # Filter the data to remove bad pixels
-            nbar = return_good_pixels(nbar, pq)
-            pq = None
-            # Create monthly averaged data
-            monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
-            ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
-            ds = ndvi.to_dataset(name='ndvi')
-            ds.attrs['affine'] = affine
-            ds.attrs['crs'] = crs
-            output_filename = OUTPUT_FILENAME5 % time_period.start_time.strftime('%Y-%m')
-            ds.to_netcdf(path=output_filename, mode='w')    
+            if pq :
+                crs = nbar.crs.wkt
+                affine = nbar.affine
+                # Filter the data to remove bad pixels
+                nbar = return_good_pixels(nbar, pq)
+                pq = None
+                # Create monthly averaged data
+                monthly_nbar = nbar.resample('M', dim = 'time', how = 'mean')
+                ndvi = (monthly_nbar['nir'] - monthly_nbar['red']) / (monthly_nbar['nir'] + monthly_nbar['red'])
+                ds = ndvi.to_dataset(name='ndvi')
+                ds.attrs['affine'] = affine
+                ds.attrs['crs'] = crs
+                output_filename = OUTPUT_FILENAME5 % time_period.start_time.strftime('%Y-%m')
+                ds.to_netcdf(path=output_filename, mode='w')    
 
     print('Finished getting data for sensor 5 for ' + Studysite.Name)
 
@@ -452,9 +413,11 @@ if (file_check == False) or (size_check < 99999):
     output_filename = concat_output_name
     ds.to_netcdf(path = output_filename, mode = 'w')
     print('Saved monthly averages for ' + Studysite.Name)
-else:
-    print('The concat file is there, so lets open that')
-    ndvi_monthly = xr.open_dataset(concat_output_name)
+print("Let's open the concat file")
+ndvi_monthly = xr.open_dataset(concat_output_name)
+affine = ndvi_monthly.attrs['affine']
+crs = ndvi_monthly.attrs['crs']
+ndvi_monthly = ndvi_monthly.ndvi
 
 print('Now to the rest of the code...')
 
@@ -473,41 +436,54 @@ else:
 monthDict = {'January':0, 'February':1, 'March':2, 'April':3, 'May':4, 'June':5, 'July':6, 'August':7, 'September':8,
            'October':9, 'November':10, 'December':11}
 
-#Split pull out all of the months of interest using the function defined above
-split_data = month_cut(ndvi_monthly, month_1, month_2)
-#Now perform the linear regression
-print('Calculating slope and p values')
-slope_xr, p_val_xr = linear_regression_grid(split_data, mask_no_trend = True)
+# We need to check for slope and pval files
+file_check1 = os.path.isfile(slope_output_name)
+file_check2 = os.path.isfile(pval_output_name)
 
-# Save the outputs so that we don't need to keep running this script
-ds = p_val_xr.to_dataset(name='p_val')
-ds.attrs['affine'] = ndvi_monthly.affine
-ds.attrs['crs'] = ndvi_monthly.crs.wkt
-output_filename = pval_output_name
-ds.to_netcdf(path = output_filename, mode = 'w')
-print('wrote %s' % output_filename)
+if file_check1 & file_check2 == True:
+    print ('Slope and pval files already created')
+else:
+    #Split pull out all of the months of interest using the function defined above
+    split_data = month_cut(ndvi_monthly, month_1, month_2)
+    #Now perform the linear regression
+    print('Calculating slope and p values')
+    slope_xr, p_val_xr = linear_regression_grid(split_data, mask_no_trend = True)
 
-ds = slope_xr.to_dataset(name='slope')
-ds.attrs['affine'] = ndvi_monthly.affine
-ds.attrs['crs'] = ndvi_monthly.crs.wkt
-output_filename = slope_output_name
-ds.to_netcdf(path = output_filename, mode = 'w')
-print('wrote %s' % output_filename)
+    # Save the outputs so that we don't need to keep running this script
+    ds1 = p_val_xr.to_dataset(name='p_val')
+    ds1.attrs['affine'] = affine
+    ds1.attrs['crs'] = crs
+    output_filename = pval_output_name
+    ds1.to_netcdf(path = output_filename, mode = 'w')
+    print('wrote %s' % output_filename)
 
-#Write the files out into a tif file for viewing in GIS
-# You may need to adjust the default_profile values so that blockysize is not larger than the xr spatial dimensions
-#print(ds)
-#outfile = geotiff_output_name
+    ds2 = slope_xr.to_dataset(name='slope')
+    ds2.attrs['affine'] = affine
+    ds2.attrs['crs'] = crs
+    output_filename = slope_output_name
+    ds2.to_netcdf(path = output_filename, mode = 'w')
+    print('wrote %s' % output_filename)
 
-#Function below is from https://github.com/data-cube/agdc-v2/blob/develop/datacube/helpers.py
-#DEFAULT_PROFILE = {
-#    'blockxsize': 128,
-#    'blockysize': 128,
-#    'compress': 'lzw',
-#    'driver': 'GTiff',
-#    'interleave': 'band',
-#    'nodata': 0.0,
-#    'photometric': 'RGBA',
-#    'tiled': True}
+# Check for geotiff file
+tiff_check = os.path.isfile(geotiff_output_name)
+if tiff_check == True:
+    print('Geotiff already there')
+else:
+    slope = xr.open_dataset(slope_output_name)
+    #Write the files out into a tif file for viewing in GIS
+    #You may need to adjust the default_profile values so that blockysize is not larger than the xr spatial dimensions
+    outfile = geotiff_output_name
 
-#write_geotiff(outfile, ds)
+    #Function below is from https://github.com/data-cube/agdc-v2/blob/develop/datacube/helpers.py
+    DEFAULT_PROFILE = {
+       #'blockxsize': 128,
+       #'blockysize': 128,
+       'compress': 'lzw',
+       'driver': 'GTiff',
+       'interleave': 'band',
+       'nodata': 0.0,
+       'photometric': 'RGBA',
+       'tiled': True}
+
+    write_geotiff(outfile, slope)
+print('finished with ' + Studysite.Name)
