@@ -258,13 +258,13 @@ pathnamedir = '/g/data/p25/cek156/NDVI/' + Studysite.Name
 concat_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/NDVI_monthly_concat.nc'
 
 #Define time interval and months range for linear regression
-month_1 = 'February'
+month_1 = 'January'
 #f you want to only look at one month then simply make month_1 equal to month_2
-month_2 = 'September'
+month_2 = 'June'
 
-slope_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_slope.nc'
-pval_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_pVal.nc'
-geotiff_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_drying_trend.tiff'
+slope_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_slope_JanJun.nc'
+pval_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_pVal_JanJun.nc'
+geotiff_output_name = '/g/data/p25/cek156/NDVI/' + Studysite.Name + '/' + Studysite.Name + '_NDVI_drying_trend_JanJun.tiff'
 
 ##############################################################################################
 ### You shouldn't need to change anything below here #########################################
