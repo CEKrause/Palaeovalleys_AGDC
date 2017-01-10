@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -P z67
 #PBS -q normal
-#PBS -l walltime=24:00:00
+#PBS -l walltime=05:00:00
 #PBS -l mem=32GB
 #PBS -l ncpus=16
 #PBS -l wd
@@ -22,7 +22,7 @@ echo $FIRST
 
 #PBS -P z67
 #PBS -q normal
-#PBS -l walltime=24:00:00
+#PBS -l walltime=05:00:00
 #PBS -l mem=32GB
 #PBS -l ncpus=16
 #PBS -l wd
@@ -31,17 +31,18 @@ module use /g/data/v10/public/modules/modulefiles
 
 module load agdc-py3-prod
 
-SECOND=$(qsub -W depend=afterok:$FIRST for i in {16..31}; do
+qsub -W depend=afterany:$SECOND
+for i in {16..31}; do
  python Palaeovalley_NDVI_linear_regression_raijin.py $i > linear_regress_out_$i &
 done
 
-wait)
+wait
 
 echo $SECOND
 
 #PBS -P z67
 #PBS -q normal
-#PBS -l walltime=24:00:00
+#PBS -l walltime=05:00:00
 #PBS -l mem=32GB
 #PBS -l ncpus=11
 #PBS -l wd
@@ -50,7 +51,7 @@ module use /g/data/v10/public/modules/modulefiles
 
 module load agdc-py3-prod
 
-qsub -W depend=afterok:$SECOND 
+qsub -W depend=afterany:$SECOND 
 for i in {32..42}; do
  python Palaeovalley_NDVI_linear_regression_raijin.py $i > linear_regress_out_$i &
 done
