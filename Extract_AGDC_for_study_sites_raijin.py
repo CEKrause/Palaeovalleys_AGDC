@@ -32,6 +32,8 @@ import xarray as xr
 import scipy.stats
 import pandas
 import os 
+import sys
+from affine import Affine
 
 # Set up some functions to use later in the code
 def warp_geometry(geom, src_crs, dst_crs):
@@ -78,6 +80,11 @@ def return_good_pixels(nbar, pq):
     pqmask = masking.make_mask(pq.pixelquality,  **mask_components)
     return nbar.where(pqmask)
 
+print(sys.argv)
+num = int(sys.argv[1])
+Studysite = names.ix[num]
+print('Working on ' + Studysite.Name)
+
 names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimiter = ',')
 
 # Pull in some data from the datacube to apply our mask to
@@ -97,11 +104,6 @@ sensors = ['ls8', 'ls7', 'ls5']
 
 OUTPUT_dir = '/g/data/p25/cek156/' + Studysite.Name
 
-print(sys.argv)
-num = int(sys.argv[1])
-Studysite = names.ix[num]
-print('Working on ' + Studysite.Name)
- 
 # Set up AGDC extraction query
 query = {'lat': (names.maxlat[num], names.minlat[num]), 
          'lon': (names.minlon[num], names.maxlon[num]),
