@@ -12,7 +12,7 @@ module load agdc-py3-prod
 
 FIRST=$(qsub 
 for i in {0..15}; do
- python Extract_AGDC_for_study_sites_raijin..py $i > AGDC_out_$i &
+ python Extract_AGDC_for_study_sites_raijin.py $i > AGDC_out_$i &
 done
 
 wait)
@@ -33,7 +33,7 @@ module load agdc-py3-prod
 
 qsub -W depend=afterany:$SECOND
 for i in {16..31}; do
- python Extract_AGDC_for_study_sites_raijin..py $i > AGDC_out_$i &
+ python Extract_AGDC_for_study_sites_raijin.py $i > AGDC_out_$i &
 done
 
 wait
@@ -53,7 +53,7 @@ module load agdc-py3-prod
 
 qsub -W depend=afterany:$SECOND 
 for i in {32..42}; do
- python Extract_AGDC_for_study_sites_raijin..py $i > AGDC_out_$i &
+ python Extract_AGDC_for_study_sites_raijin.py $i > AGDC_out_$i &
 done
 
 wait
