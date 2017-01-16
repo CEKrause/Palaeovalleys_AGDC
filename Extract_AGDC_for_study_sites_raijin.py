@@ -80,12 +80,14 @@ def return_good_pixels(nbar, pq):
     pqmask = masking.make_mask(pq.pixelquality,  **mask_components)
     return nbar.where(pqmask)
 
+##############################################################################################
+
+names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimiter = ',')
+
 print(sys.argv)
 num = int(sys.argv[1])
 Studysite = names.ix[num]
 print('Working on ' + Studysite.Name)
-
-names = pandas.read_csv('/g/data/p25/cek156/case_study_sites_small.csv', delimiter = ',')
 
 # Pull in some data from the datacube to apply our mask to
 dc = datacube.Datacube(app='poly-drill-recipe')
