@@ -1,0 +1,91 @@
+#!/bin/bash
+#PBS -P z67
+#PBS -q normal
+#PBS -l walltime=12:00:00
+#PBS -l mem=32GB
+#PBS -l ncpus=16
+#PBS -l wd
+
+module use /g/data/v10/public/modules/modulefiles
+
+module load agdc-py3-prod
+
+FIRST=$(qsub 
+for i in {0..15}; do
+ python Extract_AGDC_for_study_sites_raijin.py $i > AGDC_out_m_$i &
+done
+
+wait)
+
+echo $FIRST
+
+
+#PBS -P z67
+#PBS -q normal
+#PBS -l walltime=12:00:00
+#PBS -l mem=32GB
+#PBS -l ncpus=16
+#PBS -l wd
+
+module use /g/data/v10/public/modules/modulefiles
+
+module load agdc-py3-prod
+
+qsub -W depend=afterany:$SECOND
+for i in {16..31}; do
+ python Extract_AGDC_for_study_sites_raijin.py $i > AGDC_out_m_$i &
+done
+
+wait
+
+echo $SECOND
+
+#PBS -P z67
+#PBS -q normal
+#PBS -l walltime=12:00:00
+#PBS -l mem=32GB
+#PBS -l ncpus=16
+#PBS -l wd
+
+module use /g/data/v10/public/modules/modulefiles
+
+module load agdc-py3-prod
+
+qsub -W depend=afterany:$SECOND 
+for i in {32..47}; do
+ python Extract_AGDC_for_study_sites_raijin.py $i > AGDC_out_m_$i &
+done
+
+wait
+
+#PBS -P z67
+#PBS -q normal
+#PBS -l walltime=12:00:00
+#PBS -l mem=32GB
+#PBS -l ncpus=2
+#PBS -l wd
+
+module use /g/data/v10/public/modules/modulefiles
+
+module load agdc-py3-prod
+
+qsub -W depend=afterany:$SECOND
+for i in {48..49}; do
+ python Extract_AGDC_for_study_sites_raijin.py $i > AGDC_out_m_$i &
+done
+
+wait
+
+
+
+
+
+
+
+
+
+
+
+
+
+

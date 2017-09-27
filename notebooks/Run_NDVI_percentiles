@@ -1,0 +1,28 @@
+#!/bin/bash
+#PBS -P z67
+#PBS -q express
+#PBS -l walltime=12:00:00
+#PBS -l mem=32GB
+#PBS -l ncpus=1
+#PBS -l wd
+
+module use /g/data/v10/public/modules/modulefiles
+module load agdc-py3-prod
+
+echo 'Modules loaded'
+
+python NDVI_mask_rainfall_percentiles_loop.py
+
+
+
+
+
+
+
+
+
+
+
+
+
+
